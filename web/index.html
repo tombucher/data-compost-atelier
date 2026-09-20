@@ -170,48 +170,40 @@
   .axe .legende b { color: var(--ferment); font-weight: 500; }
   .etat { font-size: 11px; color: var(--spore); min-height: 15px; text-align: center; }
 
-  /* --- les matières : on voit avant de choisir ---
-     Ce qui est posé monte en haut et s'ouvre sur toute la largeur ; ce qui
-     reste disponible attend en dessous, en vignettes. Une matière active au
-     milieu de la grille y ouvrait un trou. */
-  .posees { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
-  .matieres { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
-
-  .posees .bloc {
-    border: 1px solid var(--braise); border-radius: 2px; overflow: hidden;
-  }
-  .posees .matiere {
-    flex-direction: row; align-items: stretch; width: 100%;
-    border: 0; border-radius: 0;
-  }
-  .posees .matiere .apercu { width: 52px; aspect-ratio: auto; flex: 0 0 52px; }
-  .posees .matiere .titre { flex: 1; }
-  .posees .detail { padding: 8px 8px 10px; border-bottom: 0; background: var(--litiere); }
-
-  .matieres .bloc { display: contents; }
+  /* --- les matières : une par ligne, comme une strate de la pile ---
+     En deux colonnes, les noms se tronquaient et la vignette réservait
+     133 px de haut — vides tant qu'aucune image n'est posée. En ligne, la
+     vignette tient dans la hauteur du nom et ne laisse pas de trou. */
+  .matieres { display: flex; flex-direction: column; gap: 3px; }
+  .bloc { display: flex; flex-direction: column; }
 
   .matiere {
+    display: grid; grid-template-columns: 40px 1fr auto auto;
+    align-items: center; gap: 9px;
     border: 1px solid var(--radicelle); background: var(--litiere);
-    padding: 0; cursor: pointer; overflow: hidden; text-align: left;
-    display: flex; flex-direction: column; color: var(--mycelium);
-    border-radius: 2px;
+    padding: 0 8px 0 0; cursor: pointer; text-align: left;
+    color: var(--mycelium); border-radius: 2px; overflow: hidden;
   }
   .matiere:hover { border-color: #57493A; }
-  .matiere .apercu { aspect-ratio: 1; background: #0E0C0A center/cover no-repeat; }
-  .matiere .titre {
-    display: flex; align-items: center; gap: 4px;
-    padding: 4px 5px; font-size: 11px; line-height: 1.25;
+  .matiere .apercu {
+    width: 40px; height: 40px; display: block;
+    background: #0E0C0A center/cover no-repeat;
   }
-  .matiere .titre b { font-weight: 500; flex: 1; }
-  .matiere .titre s { text-decoration: none; color: var(--spore); font-size: 10px; }
-  .matiere.active { border-color: var(--braise); }
-  .matiere.active .titre { background: var(--braise); color: #1A1508; }
-  .matiere.active .titre s { color: #58430F; }
-  .matiere.active .aide { border-color: #8A5620; color: #58430F; }
+  .matiere .nom { font-size: 12.5px; font-weight: 500; }
+  .matiere .valeur { color: var(--spore); font-size: 11px; }
 
-  /* Les réglages d'une matière n'apparaissent que si elle est posée. */
-  .detail { padding: 4px 2px 9px; }
-  .formes { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 7px; }
+  .matiere.active { border-color: var(--braise); background: #3A2A16; }
+  .matiere.active .nom { color: #F3D9B4; }
+  .matiere.active .valeur { color: var(--braise); }
+
+  /* Les réglages n'apparaissent que si la matière est posée, et juste sous
+     elle : elle ne change pas de place quand on l'active. */
+  .detail {
+    padding: 9px 10px 11px; margin-bottom: 2px;
+    border: 1px solid var(--braise); border-top: 0;
+    border-radius: 0 0 2px 2px; background: #221B12;
+  }
+  .formes { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 8px; }
   .forme {
     width: 30px; height: 30px; padding: 0; border-radius: 2px;
     background: #F0EADC center/cover no-repeat;
@@ -297,8 +289,7 @@
     .scene > aside { border: 0; border-top: 1px solid var(--radicelle); }
     .pile { display: grid; grid-template-columns: repeat(auto-fill, minmax(238px, 1fr)); gap: 4px; }
     .reserve { grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); }
-    .matieres { grid-template-columns: repeat(auto-fill, minmax(146px, 1fr)); }
-    .posees .bloc { max-width: 540px; }
+    .matieres { max-width: 560px; }
     main { padding: 22px 14px; }
     #apercu { max-height: 66vh; }
   }
@@ -374,8 +365,7 @@
     <section>
       <h2>Matières <em id="note-cible"></em></h2>
       <select id="cible" title="À quelle couche appliquer ces matières"></select>
-      <div class="posees" id="posees" style="margin-top:6px"></div>
-      <div class="matieres" id="matieres"></div>
+      <div class="matieres" id="matieres" style="margin-top:6px"></div>
     </section>
 
     <section>
@@ -761,7 +751,8 @@ function batirMatieres() {
     <div class="bloc" id="b-${e.cle}">
     <button class="matiere" id="m-${e.cle}" data-cle="${e.cle}" aria-pressed="false">
       <span class="apercu" id="ap-${e.cle}"></span>
-      <span class="titre"><b>${e.nom}</b><s id="v-${e.cle}"></s></span>
+      <span class="nom">${e.nom}</span>
+      <span class="valeur" id="v-${e.cle}"></span>
     </button>
     <div class="detail" id="d-${e.cle}" hidden>
       <div class="ligne">
@@ -825,10 +816,6 @@ function peindreEffets() {
     $(`#d-${e.cle}`).hidden = !r.actif;
     $(`#f-${e.cle}`).value = r.force;
 
-    // Le bloc change de camp selon qu'il est posé ou disponible
-    const bloc = $(`#b-${e.cle}`);
-    const foyer = r.actif ? $('#posees') : $('#matieres');
-    if (bloc.parentElement !== foyer) foyer.appendChild(bloc);
 
     const vue = etat.vignettes[e.cle];
     $(`#ap-${e.cle}`).style.backgroundImage = vue ? `url(${vue})` : 'none';
@@ -1104,8 +1091,7 @@ function brancherAides() {
       || (hote.getAttribute('for') || '').replace(/^(on|f|a)-/, '');
     const texte = AIDES[cible];
     if (!texte) return;
-    const ligne = hote.classList.contains('matiere')
-      ? hote.querySelector('.titre') : hote.parentElement;
+    const ligne = hote.classList.contains('matiere') ? hote : hote.parentElement;
     if (!ligne || ligne.querySelector('.aide')) return;
 
     const bouton = document.createElement('button');

@@ -77,10 +77,10 @@ strate porte sur son flanc une jauge qui montre où elle en est à l'instant
 courant, et deux boutons pour la remonter dans la pile ou l'en retirer ;
 cliquer sa vignette la règle à part du reste.
 
-À droite, les matières sont des tuiles qui **montrent ce qu'elles font** sur
-les images en cours, avant qu'on les active. Celles qu'on pose montent en
-haut du panneau et s'ouvrent sur leurs réglages ; les autres attendent en
-dessous. Les sept formes de trame sont des pastilles montrant le motif exact
+À droite, chaque matière occupe une ligne, avec une vignette qui **montre ce
+qu'elle fait** sur les images en cours, avant qu'on l'active. Une matière
+posée s'ouvre sur ses réglages juste en dessous, sans changer de place dans
+la liste. Les sept formes de trame sont des pastilles montrant le motif exact
 que la trame produira.
 
 L'aperçu se recalcule en continu : sur trois images, comptez 0,2 s pour une
