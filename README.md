@@ -1,34 +1,79 @@
 # Atelier
 
-Instrument de composition par saillance et dégradation. Plusieurs images en
-entrée, un axe de décomposition, une image ou une vidéo en sortie — à la
-taille qu'on veut.
+Un instrument pour composer plusieurs photographies en une seule image, puis
+la laisser se décomposer.
 
-Reprend le moteur de `blending-image2.py`, qui a produit les 230 œuvres des
-six séries de décembre 2024, en levant ce qui empêchait d'en faire un outil.
+## Ce que ça fait
 
-## Ce que ça change
+On choisit deux à quatre images. Elles se superposent sur une toile carrée,
+chacune n'apparaissant que là où elle retient le regard : le programme calcule
+une **carte de saillance** — les zones qui attirent l'œil — et s'en sert comme
+d'un pochoir. Le sujet de chaque photographie ressort, son fond s'efface au
+profit des autres.
 
-**La composition ne dépend plus de la résolution.** On explore librement en
-basse définition, et un tirage retenu se relance en 4000 ou 8000 px sans rien
-perdre. Les 230 œuvres existantes sont bloquées en 1024×1024, soit 8,7 cm à
-300 dpi ; le même travail sort maintenant à 34 cm et au-delà.
+Sur cette composition on pose des **matières** : une trame de journal, un
+passage en noir et blanc, une pixellisation, un tri des pixels par bandes, une
+séparation des canaux de couleur. Elles mordent sur les zones les plus calmes
+et laissent le sujet net. Cette asymétrie fait l'image.
 
-**Le hasard reste entier.** Sans graine, chaque rendu est une composition que
-personne n'a demandée. La graine ne sert qu'à revenir sur un tirage pour
-l'agrandir — elle n'oblige à rien répéter.
+Puis vient le temps. Une barre sous l'aperçu va de **intact** à **composté**.
+En la parcourant, chaque image de la pile se défait : sa matière s'intensifie,
+ses pixels se trient, ses couleurs se désalignent, et elle s'efface par
+plaques en laissant voir celle du dessous. Ce qui est posé en dernier part le
+premier ; ce qui est le plus dense résiste le plus longtemps.
 
-**Il n'y a qu'une œuvre, prise à des moments différents.** Les images se
-superposent, puis le temps les défait. Une image fixe est un instant prélevé
-sur cet axe, une vidéo est l'axe entier ; on ne choisit qu'au moment de
-tirer. C'est ce qui fait tenir le propos : le compostage est un mécanisme qui
-évolue dans le temps, pas deux modes d'export.
+## Ce qu'on en sort
 
-**Rien ne s'accumule.** La graine et les réglages voyagent dans les
-métadonnées de l'image, jamais dans un fichier à côté. Une image reste un
-fichier et porte de quoi se refaire. Ce qui n'est pas exporté disparaît.
+Un instant de cet axe, en image fixe, à la taille qu'on veut — 8000 px, soit
+68 cm à 300 dpi. Ou bien l'axe entier, en vidéo. Le choix ne se fait qu'au
+moment d'exporter : il n'y a pas deux modes, il y a une œuvre et des moments
+où la prendre.
+
+Chaque image exportée porte dans ses métadonnées de quoi se refaire — la
+graine du tirage et tous les réglages. Pas de fichier de projet à côté, pas de
+bibliothèque à entretenir. Ce qu'on n'exporte pas disparaît.
+
+## D'où ça vient
+
+Ce dépôt prolonge un projet d'art numérique sur le **compostage de données** :
+traiter des fichiers comme de la matière organique, qui se décompose et
+nourrit autre chose. [data-compost](https://github.com/tombucher/data-compost)
+en est l'installation, qui tourne seule sur un Raspberry Pi ; l'atelier en est
+l'instrument, qu'on pilote à la main.
+
+Le moteur reprend deux scripts : `blending-image2.py`, qui avait produit 230
+œuvres en décembre 2024, et `datamoshing4.py`, qui faisait des vidéos en mars
+2025. Ni les scripts ni les œuvres ne sont dans ce dépôt ; le code les cite
+pour expliquer d'où viennent ses décisions, et les tests comparent le moteur
+à des copies de leurs implémentations d'origine.
+
+Trois choses les empêchaient de servir d'outil, et ce sont elles qui ont
+motivé la réécriture.
+
+**Ils étaient prisonniers de leur résolution.** Les forces étaient exprimées en
+pixels, calibrées pour du 1024 × 1024 : à 4000 px le grain devenait quatre
+fois plus fin, et la composition changeait. Les 230 œuvres existantes sont
+donc bloquées à 8,7 cm à 300 dpi. Tout est maintenant exprimé en fraction de
+la toile, et la même composition sort à n'importe quelle taille.
+
+**Le hasard était perdu.** Les tirages passaient par le `random` global, sans
+graine : une composition réussie ne pouvait pas être retrouvée pour être
+agrandie. Elle l'est — et la graine ne sert qu'à cela, elle n'oblige à rien
+répéter.
+
+**Il n'y avait pas de temps.** Les vidéos se faisaient de leur côté, avec
+leurs propres réglages et une autre composition, si bien qu'une image fixe et
+une séquence n'avaient rien à voir. Les deux ne font plus qu'un seul axe.
+
+Leurs accidents qui faisaient l'image — une saturation qui déborde, un canal
+rouge jamais trié — ont été gardés plutôt que corrigés en silence, et rendus
+réglables. Voir **Fidélité** dans l'interface, et les
+sections du même nom plus bas.
 
 ## Démarrer
+
+Il faut Python — le développement s'est fait en 3.14 — et un dossier
+d'images à soi : le dépôt n'en fournit aucune.
 
 ```bash
 python3 -m venv venv
@@ -36,7 +81,8 @@ venv/bin/pip install -r requirements.txt
 venv/bin/python demarrer.py ~/Documents/mes-images
 ```
 
-Le navigateur s'ouvre sur l'atelier. Rien n'est hébergé : le serveur tourne en
+Le dernier argument est le dossier où prendre les images. Le navigateur
+s'ouvre sur l'atelier. Rien n'est hébergé : le serveur tourne en
 local, les images ne quittent pas le disque.
 
 | Option | Effet |
@@ -221,7 +267,7 @@ Ce qui reste en écart et pourquoi, c'est écrit dans `atelier/chance.py`.
 Dans l'original, la saturation était multipliée dans un tableau `uint8` : au
 delà de 255 les valeurs repassaient par le bas — 150 × 2 donnait 44 — et les
 couleurs cassaient. Ce n'était pas voulu, mais seize œuvres de
-`serie1_grece/SATURATE` en vivent.
+une série de 2024 en vivent.
 
 C'est donc devenu un réglage, actif par défaut, avec le calcul écrit
 explicitement pour qu'aucune mise à jour de numpy ne le change. Décoché, la
@@ -242,7 +288,7 @@ que la recette survit à l'aller-retour dans l'image.
 ## L'axe du temps
 
 La barre sous l'aperçu va de **intact** à **composté**. À gauche, la
-composition telle que la rendait `blending-image2` — bit pour bit, c'est
+composition telle que la rendait le script de 2024 — bit pour bit, c'est
 vérifié par un test. En avançant, chaque couche se trie par segments, perd
 l'alignement de ses canaux, s'arrache par plaques et laisse voir celle du
 dessous.
@@ -253,10 +299,10 @@ taille choisie ; **Tirer tout l'axe en vidéo** écrit un mp4. Le calcul d'une
 vidéo dure des minutes en grand format, il tourne en tâche de fond et
 l'avancement s'affiche.
 
-C'est ce qui remplace la capture d'écran. Les 116 images de
-`export-vid_sauv/SCREENSHOT` font 2254 px alors que leurs vidéos sources en
-contenaient 3016 : la capture perdait un quart de la définition. Ici l'instant
-sort à 4000 ou 8000 px.
+C'est ce qui remplace la capture d'écran. En 2025, les images étaient tirées
+des vidéos en photographiant l'écran : 116 fichiers de 2254 px, alors que les
+vidéos sources en contenaient 3016. La capture perdait un quart de la
+définition. Ici l'instant sort à 4000 ou 8000 px.
 
 ### Ce que le temps travaille
 
@@ -290,18 +336,18 @@ appliquait toujours les trois mêmes gestes.
 Ces réglages ne mordent qu'une fois l'axe engagé : à l'instant 1 la
 composition est intacte, et les bouger n'y change rien. Le panneau le dit.
 
-Les quatre bascules de **Fidélité** disent quoi garder de l'original : le
-tri par canaux séparés, le rouge jamais trié, le tri sur la zone visible, la
-dissolution par quantiles. Les trois dernières sont des corrections — voir
-plus bas — et se décochent pour retrouver le rendu de 2025.
+Les quatre bascules de **Fidélité** disent ce qu'on garde du script
+d'origine : le tri par canaux séparés, le rouge jamais trié, le tri sur la
+zone visible, la dissolution par quantiles. Les trois dernières sont des
+corrections de défauts — expliquées plus bas — et se décochent pour
+retrouver exactement le rendu des vidéos de mars 2025.
 
-### Où sont passées les explications
+### Si un réglage est obscur
 
-Chaque réglage porte un petit `?` : le survol du libellé donne une phrase sur
-ce qu'il fait concrètement à l'image. Les explications étaient auparavant
-posées sous les curseurs, où elles se lisaient comme l'introduction du bloc
-suivant. Seules les notes qui présentent une section entière restent à
-l'écran, sous leur titre et marquées d'un trait.
+Chaque réglage porte un `?` en bout de ligne. Un clic ouvre une phrase sur ce
+qu'il fait concrètement à l'image ; un clic ailleurs, ou Échap, la referme.
+Les notes qui restent à l'écran, sous un titre et marquées d'un trait,
+présentent une section entière.
 
 ### Pourquoi l'original ne montrait pas de datamoshing
 
@@ -356,10 +402,11 @@ l'effet. Elle est conservée, comme le débordement de saturation.
 - L'interface n'a été éprouvée que sur sept images sources. La colonne de
   vignettes n'a pas été essayée sur un dossier fourni.
 
-## Pourquoi un dépôt séparé
+## Pourquoi deux dépôts plutôt qu'un
 
 `data-compost` est une installation : une machine qui tourne seule sur
 Raspberry Pi, sous contrainte de robustesse et de matériel. L'atelier est un
 instrument qu'on pilote, sous contrainte de vitesse d'essai et de qualité de
-sortie. Les deux partagent un vocabulaire — saillance, décomposition, érosion
-— mais aucun code qui doive rester synchronisé.
+sortie. Les deux partagent un vocabulaire — saillance, décomposition,
+érosion — mais aucune ligne de code qui doive rester synchronisée. Les tenir
+ensemble aurait couplé deux rythmes de travail sans rien mutualiser.
