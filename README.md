@@ -195,12 +195,26 @@ pourtour des zones saillantes, pas leur intérieur. L'image se réduit alors à
 un liseré autour de son sujet, dont le centre disparaît de la composition.
 À 0, le réglage est inactif.
 
-**Bavure** dit de combien les matières débordent de la zone calme. Ce réglage
-compte plus qu'il n'y paraît : la zone calme couvre 60 % de la surface mais ne
-porte que 14 % du poids de la composition, puisque le poids de chaque pixel
-est sa saillance. Une trame s'y voit — elle passe l'image en noir et blanc —
-mais un tri, qui réordonne sans changer les valeurs, s'y noie. La bavure lui
-donne de quoi mordre. À 1, les matières couvrent toute l'image, sujet compris.
+**Bavure** fait deux choses, qui sont la même : la matière déborde de la zone
+calme, et son bord cesse d'être une coupure.
+
+Le débordement compte plus qu'il n'y paraît. La zone calme couvre 60 % de la
+surface mais ne porte que 14 % du poids de la composition, puisque le poids
+de chaque pixel est sa saillance. Une trame s'y voit — elle passe l'image en
+noir et blanc — mais un tri, qui réordonne sans changer les valeurs, s'y
+noie. La bavure lui donne de quoi mordre. À 1, les matières couvrent toute
+l'image, sujet compris.
+
+Le fondu règle un défaut visible surtout à mi-axe. Les masques sont booléens
+par nature — un pixel est traité ou il ne l'est pas, retiré ou il ne l'est
+pas — et découpent donc la matière au rasoir : elle s'arrête net sur du noir.
+Les adoucir ne suffit pas, car la normalisation du poids rend sa pleine
+intensité au moindre pixel couvert. La bavure agit donc sur la présence
+elle-même : la matière s'éteint vers le fond au lieu de s'y arrêter. Mesurée
+sur le pourtour des plages noires, la raideur du bord passe de 145 à 48.
+
+Le fondu ne mord qu'une fois l'axe engagé : au premier instant il n'y a pas
+d'évidement, et la composition doit rester celle qu'on a réglée.
 
 ## Le cadrage
 

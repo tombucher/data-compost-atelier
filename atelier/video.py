@@ -309,7 +309,8 @@ def dissolve_field(saliency: np.ndarray, even: bool = True):
     return field, even
 
 
-def retention_at(field: np.ndarray, progress: float, even: bool = True) -> np.ndarray:
+def retention_at(field: np.ndarray, progress: float, even: bool = True,
+                 softness: float = 0.0) -> np.ndarray:
     """Ce qui reste d'une image à un avancement donné, entre 0 et 1.
 
     À 0 tout est gardé, à 1 il ne reste rien. Contrairement à
@@ -318,12 +319,20 @@ def retention_at(field: np.ndarray, progress: float, even: bool = True) -> np.nd
 
     `field` est la carte préparée par `dissolve_field`, qui dit aussi si la
     répartition par quantiles reste applicable.
+
+    Le masque est binaire par nature — un pixel est retiré ou il ne l'est
+    pas — et découpe donc la matière au rasoir. `softness`, en pixels, fond
+    cette découpe : la matière s'efface alors en s'amincissant, au lieu de
+    s'arrêter net sur du noir.
     """
     step = float(np.clip(progress, 0.0, 1.0)) ** DWELL
     if step >= 1.0:
         return np.zeros(field.shape, dtype=np.float32)
     threshold = float(np.quantile(field, step)) if even else step
-    return (field >= threshold).astype(np.float32)
+    garde = (field >= threshold).astype(np.float32)
+    if softness > 0:
+        garde = cv2.GaussianBlur(garde, (0, 0), float(softness))
+    return garde
 
 
 def frame_draw(seed: int, pair: int, index: int):

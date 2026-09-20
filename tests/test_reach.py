@@ -359,3 +359,70 @@ class TestTheMoshDirection:
         back = read_recipe(save_with_recipe(
             np.zeros((32, 32, 3), np.uint8), tmp_path / "o.png", recipe))
         assert back.effects[0].cross is True
+
+
+class TestTheBleedActuallyBleeds:
+    """Une bavure qui déplace la coupure sans la fondre n'est pas une bavure.
+
+    Élargir la zone traitée ne suffit pas : un masque booléen tranche au
+    rasoir où qu'on le place, et la normalisation du poids rend sa pleine
+    intensité au moindre pixel couvert. Le bord de la matière restait donc
+    une découpe nette sur le fond, quelle que soit la bavure.
+    """
+
+    @staticmethod
+    def _pente_au_bord(image):
+        """La raideur de la frontière entre la matière et le vide.
+
+        Mesurée sur le seul pourtour des plages noires : le grain interne du
+        datamoshing n'a rien à voir avec la question.
+        """
+        gris = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        vide = (gris < 10).astype(np.uint8)
+        noyau = np.ones((7, 7), np.uint8)
+        pourtour = cv2.dilate(vide, noyau) - cv2.erode(vide, noyau)
+        if pourtour.sum() == 0:
+            return 0.0
+        pente = cv2.Sobel(gris.astype(np.float32), cv2.CV_32F, 1, 1, ksize=5)
+        return float(np.abs(pente)[pourtour > 0].mean())
+
+    def _vue(self, photos, bave):
+        from atelier.decay import Decay, compose_at
+        chemins, images = photos
+        recipe = Recipe(sources=tuple(chemins), seed=7, bleed=bave,
+                        effects=(Effect("mosh", 0.05),))
+        return compose_at(recipe, Decay(frames=24), 460, 12, images)
+
+    def test_the_edge_softens(self, photos):
+        franc = self._pente_au_bord(self._vue(photos, 0.0))
+        fondu = self._pente_au_bord(self._vue(photos, 0.6))
+        assert fondu < franc * 0.6, (
+            f"la coupure doit se fondre, pas seulement se déplacer "
+            f"({franc:.0f} → {fondu:.0f})"
+        )
+
+    def test_less_of_the_image_falls_to_pure_black(self, photos):
+        noir = lambda v: float(np.mean(v.max(axis=2) == 0))
+        assert noir(self._vue(photos, 0.8)) < noir(self._vue(photos, 0.0))
+
+    @pytest.mark.parametrize("bave", [0.0, 0.5, 1.0])
+    def test_the_start_is_never_touched(self, photos, bave):
+        """Le fondu ne mord qu'une fois l'axe engagé."""
+        from atelier.decay import Decay, compose_at
+        chemins, images = photos
+        recipe = Recipe(sources=tuple(chemins), seed=7, bleed=bave,
+                        effects=(Effect("mosh", 0.04),))
+        assert np.array_equal(
+            render(recipe, size=300, sources=images),
+            compose_at(recipe, Decay(), 300, 0, images),
+        )
+
+    def test_no_bleed_leaves_the_edge_alone(self, photos):
+        """Sans bavure, la découpe reste franche : c'est le rendu d'origine."""
+        from atelier.decay import Decay, compose_at
+        chemins, images = photos
+        recipe = Recipe(sources=tuple(chemins), seed=7, effects=(Effect("mosh", 0.05),))
+        deux = [compose_at(recipe, Decay(frames=24), 300, 12, images) for _ in range(2)]
+        assert np.array_equal(*deux)
+        assert self._pente_au_bord(deux[0]) > 80, \
+            "à bavure nulle, le bord doit rester une coupure"

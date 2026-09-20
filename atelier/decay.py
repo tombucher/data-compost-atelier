@@ -31,6 +31,7 @@ import cv2
 import numpy as np
 
 from atelier.engine import (
+    BLEED_SOFTNESS,
     Recipe,
     apply_effects,
     blend_into,
@@ -199,7 +200,13 @@ def compose_at(
 
         if progress > 0:
             field, even = dissolve_field(saliency, decay.even_dissolve)
-            keep = retention_at(field, progress * (1.0 - decay.residue), even)
+            # La bavure vaut aussi pour l'évidement : c'est lui qui découpe
+            # la matière au rasoir sur le fond, et ces bords francs sont ce
+            # qu'on voit le plus à mi-axe.
+            keep = retention_at(
+                field, progress * (1.0 - decay.residue), even,
+                softness=float(recipe.bleed) * BLEED_SOFTNESS * size,
+            )
             rng, flips = frame_draw(recipe.seed, layer, index)
             treated = decompose_layer(
                 treated, keep, progress, size, decay, rng, flips
@@ -212,6 +219,19 @@ def compose_at(
 
     covered = weights > 1e-6
     canvas[covered] /= weights[covered][:, None]
+
+    # La normalisation rend sa pleine intensité au moindre pixel couvert :
+    # adoucir les masques en amont ne servirait à rien, le bord de la
+    # matière redeviendrait une coupure. C'est donc ici, sur la présence
+    # elle-même, que la bavure doit agir — la matière s'éteint alors vers le
+    # fond au lieu de s'y arrêter net.
+    # Seulement une fois l'axe engagé : à l'instant 0 il n'y a pas encore
+    # d'évidement, et la composition doit rester celle que rend `render`.
+    fondu = float(recipe.bleed) * BLEED_SOFTNESS * size if moment > 0 else 0.0
+    if fondu > 0.5:
+        presence = cv2.GaussianBlur(covered.astype(np.float32), (0, 0), fondu)
+        canvas *= np.clip(presence * 1.1, 0.0, 1.0)[:, :, None]
+
     return np.clip(canvas, 0, 255).astype(np.uint8)
 
 

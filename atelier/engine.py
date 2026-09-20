@@ -43,6 +43,12 @@ PREVIEW_SIZE = 1024
 EFFECTS = ("pixelate", "bitmap", "saturate", "halftone", "pixelsort", "shift",
            "mosh")
 
+# Rayon du fondu au bord du masque, en fraction de la toile, à bavure
+# pleine. À 0.04, une toile de 1024 px fond sur 40 px. Plus court, le
+# dégradé se voit à peine à côté des plages que l'évidement creuse ; plus
+# long, la matière perd ses contours propres et devient une brume.
+BLEED_SOFTNESS = 0.04
+
 
 @dataclass(frozen=True)
 class Effect:
@@ -368,11 +374,29 @@ def apply_effects(
     décompose.
     """
     part = float(np.clip(recipe.saliency_threshold, 0, 100)) / 100.0
-    # La bavure pousse le seuil vers le haut : à 1, la zone couvre tout.
+    # La bavure fait deux choses, qui sont la même : la matière s'étend
+    # au-delà de la zone calme, et son bord cesse d'être une coupure. Un
+    # masque booléen tranche au rasoir ; on mélange donc le résultat de
+    # chaque matière avec ce qu'il y avait avant, selon ce masque flouté.
     bave = float(np.clip(recipe.bleed, 0.0, 1.0))
     part = part + (1.0 - part) * bave
     quiet = saliency < np.quantile(saliency, part) if 0 < part < 1 \
         else (np.ones_like(saliency, bool) if part >= 1 else np.zeros_like(saliency, bool))
+
+    fondu = bave * BLEED_SOFTNESS * canvas
+    doux = cv2.GaussianBlur(quiet.astype(np.float32), (0, 0), fondu) \
+        if fondu > 0.5 else None
+    rude = cv2.GaussianBlur((~quiet).astype(np.float32), (0, 0), fondu) \
+        if fondu > 0.5 else None
+
+    def fondre(avant, apres, sur_le_calme: bool):
+        """Ramène la matière vers l'image d'origine au bord du masque."""
+        m = (doux if sur_le_calme else rude)
+        if m is None:
+            return apres
+        return (avant * (1.0 - m[:, :, None])
+                + apres * m[:, :, None]).astype(np.uint8)
+
     result = image
 
     for effect in (recipe.effects if effects is None else effects):
@@ -380,6 +404,8 @@ def apply_effects(
         from atelier.video import along_angle
 
         angle = float(effect.angle) % 180.0
+
+        avant = result
 
         if effect.name == "pixelate":
             result = apply_pixelate(result, quiet, effect.pixels(canvas))
@@ -414,6 +440,7 @@ def apply_effects(
                 random.Random(f"{recipe.seed}:shift"),
                 angle if effect.angle else None,
             )
+            continue   # le décalage n'a pas de bord : rien à fondre
         elif effect.name == "mosh":
             # Le tri canal par canal : c'est lui qui sépare les couleurs.
             #
@@ -439,6 +466,8 @@ def apply_effects(
                     False, low, low * 4, effect.cross,
                 ),
             )
+
+        result = fondre(avant, result, effect.name != "saturate")
 
     return result
 
