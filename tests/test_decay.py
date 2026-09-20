@@ -255,3 +255,88 @@ class TestTheDrawnAxis:
         out = compose_at(recipe, decay, 128, decay.frames // 2, sources)
         assert out.shape == (128, 128, 3)
         assert out.any(), "un axe tiré au hasard ne doit pas rendre du vide"
+
+
+class TestTheAxisFollowsTheChosenMaterials:
+    """Le compost décompose ce qu'on lui donne, pas une matière générique.
+
+    Avant, l'axe appliquait toujours les trois mêmes gestes — tri par canaux,
+    décalage RVB, évidement — pendant que les matières choisies restaient
+    figées à leur force de départ. Tout axe finissait donc en datamoshing,
+    qu'on ait posé une trame, du bitmap ou de la saturation.
+    """
+
+    @pytest.fixture
+    def sans_dechirure(self):
+        """Déchirure éteinte : ne reste que ce que le temps fait aux matières."""
+        return Decay(frames=20, tearing=0.0)
+
+    MATIERES = (("halftone", 0.010), ("pixelate", 0.006),
+                ("bitmap", 0.35), ("saturate", 1.8))
+
+    @pytest.mark.parametrize("nom,force", MATIERES)
+    def test_the_axis_moves_without_any_tearing(self, sources, sans_dechirure,
+                                                nom, force):
+        recipe = Recipe(sources=("a", "b", "c"), seed=7, bleed=0.4,
+                        effects=(Effect(nom, force),))
+        debut = compose_at(recipe, sans_dechirure, 200, 0, sources)
+        milieu = compose_at(recipe, sans_dechirure, 200, 10, sources)
+        assert not np.array_equal(debut, milieu), \
+            f"{nom} : sans déchirure, l'axe ne bouge plus"
+
+    def test_different_materials_decompose_differently(self, sources, sans_dechirure):
+        """Le point de tout : deux matières, deux décompositions."""
+        vues = {}
+        for nom, force in self.MATIERES:
+            recipe = Recipe(sources=("a", "b", "c"), seed=7, bleed=0.4,
+                            effects=(Effect(nom, force),))
+            vues[nom] = compose_at(recipe, sans_dechirure, 200, 10, sources).tobytes()
+        assert len(set(vues.values())) == len(self.MATIERES)
+
+    def test_ripening_intensifies_the_material(self, sources):
+        """Plus le mûrissement est fort, plus la matière a mordu à mi-axe."""
+        recipe = Recipe(sources=("a", "b", "c"), seed=7, bleed=0.5,
+                        effects=(Effect("halftone", 0.008),))
+        nu = compose_at(recipe, Decay(frames=20, tearing=0.0, ripening=0.0),
+                        200, 0, sources)
+
+        def morsure(montee):
+            vue = compose_at(recipe, Decay(frames=20, tearing=0.0, ripening=montee),
+                             200, 10, sources)
+            return float(np.abs(vue.astype(int) - nu.astype(int)).mean())
+
+        assert morsure(3.0) > morsure(0.5), "le mûrissement doit se sentir"
+
+    def test_no_ripening_keeps_the_material_still(self, sources):
+        """À zéro, seuls l'évidement et la déchirure travaillent."""
+        recipe = Recipe(sources=("a",), seed=7, effects=(Effect("halftone", 0.01),))
+        fige = Decay(frames=20, tearing=0.0, ripening=0.0)
+        assert np.array_equal(
+            compose_at(recipe, fige, 160, 0, sources[:1]),
+            compose_at(recipe, fige, 160, 0, sources[:1]),
+        )
+
+    def test_tearing_adds_on_top(self, sources):
+        recipe = Recipe(sources=("a", "b", "c"), seed=7, bleed=0.4,
+                        effects=(Effect("halftone", 0.01),))
+        sans = compose_at(recipe, Decay(frames=20, tearing=0.0), 200, 10, sources)
+        avec = compose_at(recipe, Decay(frames=20, tearing=1.0), 200, 10, sources)
+        assert not np.array_equal(sans, avec)
+
+    @pytest.mark.parametrize("reglage", [
+        {"ripening": 0.0}, {"ripening": 4.0}, {"tearing": 0.0}, {"tearing": 0.5},
+    ])
+    def test_neither_disturbs_the_start(self, recipe, sources, reglage):
+        """L'instant 0 reste la composition intacte, quoi qu'on règle."""
+        assert np.array_equal(
+            render(recipe, size=192, sources=sources),
+            compose_at(recipe, Decay(**reglage), 192, 0, sources),
+        )
+
+    def test_ripening_respects_each_material(self):
+        """Le bitmap plafonne à 1, la saturation grandit depuis 1."""
+        from atelier.decay import ripen
+        assert ripen(Effect("bitmap", 0.6), 5.0).strength == 1.0
+        assert ripen(Effect("saturate", 2.0), 1.0).strength == pytest.approx(3.0)
+        assert ripen(Effect("halftone", 0.01), 1.0).strength == pytest.approx(0.02)
+        assert ripen(Effect("halftone", 0.01), 0.0).strength == pytest.approx(0.01)

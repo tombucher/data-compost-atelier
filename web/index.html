@@ -266,6 +266,14 @@
     <input type="range" id="residue" min="0" max="0.6" step="0.02" value="0.12">
   </div>
   <div class="effet">
+    <div class="ligne"><label for="ripening">Mûrissement</label><span class="valeur" id="v-ripening"></span></div>
+    <input type="range" id="ripening" min="0" max="4" step="0.1" value="1">
+  </div>
+  <div class="effet">
+    <div class="ligne"><label for="tearing">Déchirure</label><span class="valeur" id="v-tearing"></span></div>
+    <input type="range" id="tearing" min="0" max="1" step="0.05" value="1">
+  </div>
+  <div class="effet">
     <div class="ligne"><label for="min_segment">Déchirure la plus courte</label><span class="valeur" id="v-min_segment"></span></div>
     <input type="range" id="min_segment" min="0.004" max="0.2" step="0.002" value="0.03">
   </div>
@@ -375,6 +383,8 @@ const AIDES = {
   // Le temps
   frames: "Le nombre d'images entre l'intact et le composté. Ne change pas la composition, seulement la finesse du parcours — et la durée de la vidéo.",
   stagger: "À zéro, toutes les images pourrissent en même temps. Au maximum, elles s'effacent l'une après l'autre. Celle posée en dernier part toujours la première.",
+  ripening: "De combien les matières que vous avez posées s'intensifient au bout de l'axe. La trame grossit, les blocs s'élargissent, le bitmap durcit, les couleurs montent. C'est ce qui fait que le compostage dépend de ce qu'on a choisi, et non d'une dégradation venue par-dessus.",
+  tearing: "La part que prend la déchirure — le tri canal par canal et le décalage RVB — dans la décomposition. Elle est la même pour toutes les matières : c'est le geste du pourrissement lui-même. À zéro, le temps ne fait plus que mûrir ce qu'on a posé, et évider.",
   residue: "La part la plus dense de chaque image, encore là à la fin. Un compost finit sur de l'humus ; à zéro, la séquence s'éteint au noir.",
   min_segment: "La plus courte des bandes que le tri réordonne. Des bandes courtes donnent un grain nerveux, des bandes longues des coulées.",
   max_segment: "La plus longue des bandes que le tri réordonne. C'est elle qui décide jusqu'où la matière peut s'étirer.",
@@ -452,8 +462,8 @@ function reglagesNeufs() {
 
 // Les réglages de l'axe, tels que le serveur les attend. Curseurs et cases
 // portent le même nom : la requête se construit sans table de correspondance.
-const AXE = ['frames', 'stagger', 'residue', 'min_segment', 'max_segment',
-             'segment_growth', 'channel_shift'];
+const AXE = ['frames', 'stagger', 'residue', 'ripening', 'tearing',
+             'min_segment', 'max_segment', 'segment_growth', 'channel_shift'];
 const BASCULES = ['enhanced', 'channel_quirk', 'sort_visible', 'even_dissolve'];
 
 const etat = {
@@ -918,6 +928,8 @@ $('#exporter').onclick = exporter;
 // Les réglages de l'axe portent tous le même nom côté page et côté serveur.
 const CHIFFRES = { frames: v => `${v} images`, stagger: v => `${Math.round(v * 100)} %`,
                    residue: v => `${Math.round(v * 100)} %`,
+                   tearing: v => `${Math.round(v * 100)} %`,
+                   ripening: v => `× ${(1 + parseFloat(v)).toFixed(1)}`,
                    segment_growth: v => `× ${(1 + parseFloat(v)).toFixed(1)}` };
 AXE.forEach(cle => {
   const el = $('#' + cle);

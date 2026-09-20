@@ -153,6 +153,8 @@ def decay_from_request(body: dict) -> Decay:
         fps=nombre("fps", 1, 60, int),
         stagger=nombre("stagger", 0.0, 1.0),
         residue=nombre("residue", 0.0, 0.9),
+        ripening=nombre("ripening", 0.0, 6.0),
+        tearing=nombre("tearing", 0.0, 1.0),
         min_segment=nombre("min_segment", 0.002, 0.5),
         max_segment=nombre("max_segment", 0.004, 0.8),
         segment_growth=nombre("segment_growth", 0.0, 6.0),
@@ -169,6 +171,7 @@ def decay_payload(decay: Decay) -> dict:
     return {
         "frames": decay.frames, "fps": decay.fps,
         "stagger": decay.stagger, "residue": decay.residue,
+        "ripening": decay.ripening, "tearing": decay.tearing,
         "min_segment": decay.min_segment, "max_segment": decay.max_segment,
         "segment_growth": decay.segment_growth,
         "channel_shift": decay.channel_shift,

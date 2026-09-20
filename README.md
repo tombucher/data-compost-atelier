@@ -258,11 +258,29 @@ C'est ce qui remplace la capture d'écran. Les 116 images de
 contenaient 3016 : la capture perdait un quart de la définition. Ici l'instant
 sort à 4000 ou 8000 px.
 
+### Ce que le temps travaille
+
+Le compost décompose la matière qui est là, pas une matière générique. Les
+matières choisies **mûrissent** donc le long de l'axe : la trame grossit, la
+pixellisation s'élargit, le bitmap durcit vers le noir et blanc francs, la
+saturation monte, les tris s'allongent. Chaque matière mûrit selon sa
+nature — le bitmap plafonne à 1, la saturation grandit depuis 1.
+
+Par-dessus vient la **déchirure**, le tri canal par canal et le décalage de
+canaux hérités du datamoshing. Elle est la même pour toutes les matières, et
+c'est voulu : c'est le geste de la décomposition elle-même. Mais elle se
+dose, et s'éteint à zéro. Sans ce réglage, tout axe finissait en
+datamoshing, qu'on ait posé une trame, du bitmap ou de la saturation — les
+matières restaient figées à leur force de départ pendant que le temps
+appliquait toujours les trois mêmes gestes.
+
 ### Les réglages de l'axe
 
 | Réglage | Ce qu'il fait |
 |---|---|
 | Durée | La longueur de l'axe, en images. Elle ne dépend pas du nombre d'images choisies : une image de plus est une couche, pas une diapositive. |
+| Mûrissement | De combien les matières posées s'intensifient au bout de l'axe. C'est ce qui lie la décomposition à ce qu'on a choisi. |
+| Déchirure | La part qu'y prend le tri par canaux et le décalage RVB. À zéro, le temps ne fait plus que mûrir et évider. |
 | Décalage entre couches | À 0 tout pourrit ensemble. Au maximum, les couches s'effacent l'une après l'autre. Ce qui est posé en dernier part en premier. |
 | Ce qui résiste | La part la plus dense de chaque couche, encore là à la fin. À 0, l'axe s'éteint au noir. |
 | Segment le plus court / le plus long | La longueur des bandes triées. Les rapports entre canaux sont conservés — c'est leur écart qui sépare les couleurs, pas leur valeur. |

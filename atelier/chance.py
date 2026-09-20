@@ -204,6 +204,11 @@ def random_decay(rng: random.Random | None = None) -> Decay:
         fps=rng.choice((20, 24)),
         stagger=rng.uniform(0.25, 0.65),
         residue=rng.uniform(0.05, 0.22),
+        # Le mûrissement fait travailler la matière tirée ; la déchirure
+        # reste présente sans tout recouvrir, sinon chaque axe finirait en
+        # datamoshing quelle que soit la veine choisie.
+        ripening=rng.uniform(0.5, 2.5),
+        tearing=rng.uniform(0.3, 1.0),
         min_segment=rng.uniform(0.02, 0.05),
         max_segment=rng.uniform(0.08, 0.16),
         segment_growth=rng.uniform(0.8, 2.5),

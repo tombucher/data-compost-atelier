@@ -25,7 +25,7 @@ s'est défait. Mettre `residue` à 0 laisse la séquence s'éteindre au noir.
 from __future__ import annotations
 
 import random
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import cv2
 import numpy as np
@@ -66,6 +66,12 @@ class Decay:
     stagger: float = 0.45
     residue: float = 0.12
 
+    # De combien les matières choisies s'intensifient au bout de l'axe, et
+    # quelle part y prend la déchirure héritée du datamoshing. À tearing 0,
+    # le temps ne fait plus que mûrir ce qu'on a posé, et évider.
+    ripening: float = 1.0
+    tearing: float = 1.0
+
     # Le tri de pixels
     min_segment: float = 0.03
     max_segment: float = 0.10
@@ -82,6 +88,24 @@ class Decay:
     def at(self, index: int) -> float:
         """L'avancement global, de 0 à 1."""
         return min(1.0, max(0.0, index / max(1, self.frames - 1)))
+
+
+def ripen(effect: Effect, amount: float) -> Effect:
+    """Fait mûrir une matière : c'est elle que le temps travaille d'abord.
+
+    Chaque matière mûrit selon sa nature. Un grain ou une longueur grossit.
+    Le bitmap ne peut pas dépasser 1 : il durcit vers le noir et blanc
+    francs. La saturation part de 1, donc c'est son écart à 1 qui grandit,
+    sans quoi la multiplier la ferait bondir dès le premier pas.
+    """
+    if amount <= 0:
+        return effect
+    if effect.name == "bitmap":
+        monte = effect.strength + (1.0 - effect.strength) * min(1.0, amount)
+        return replace(effect, strength=float(min(1.0, monte)))
+    if effect.name == "saturate":
+        return replace(effect, strength=1.0 + (effect.strength - 1.0) * (1.0 + amount))
+    return replace(effect, strength=effect.strength * (1.0 + amount))
 
 
 def layer_progress(decay: Decay, moment: float, layer: int, layers: int) -> float:
@@ -108,9 +132,12 @@ def decompose_layer(
     se voyait jamais ; `sort_visible` garde cette possibilité pour retrouver
     son rendu exact.
     """
-    if progress <= 0:
+    if progress <= 0 or decay.tearing <= 0:
         return image
 
+    # La déchirure se dose : à part réduite elle mord moins loin et décale
+    # moins, plutôt que de s'arrêter net.
+    progress = progress * float(np.clip(decay.tearing, 0.0, 1.0))
     grow = 1.0 + decay.segment_growth * progress
     minimum = max(2, int(decay.min_segment * side * grow))
     maximum = max(minimum + 1, int(decay.max_segment * side * grow))
@@ -160,11 +187,16 @@ def compose_at(
             recipe.smoothness, recipe.edge_blur,
         )
 
-        treated = apply_effects(
-            resized, saliency, recipe, size, effects_for(recipe, layer)
-        )
-
         progress = layer_progress(decay, moment, layer, len(images))
+
+        # Les matières posées mûrissent le long de l'axe : c'est ce qu'on a
+        # choisi qui se décompose, et non une dégradation venue par-dessus.
+        matieres = effects_for(recipe, layer)
+        if progress > 0 and decay.ripening:
+            matieres = tuple(ripen(e, progress * decay.ripening) for e in matieres)
+
+        treated = apply_effects(resized, saliency, recipe, size, matieres)
+
         if progress > 0:
             field, even = dissolve_field(saliency, decay.even_dissolve)
             keep = retention_at(field, progress * (1.0 - decay.residue), even)
