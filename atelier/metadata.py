@@ -31,16 +31,19 @@ EXIF_IMAGE_DESCRIPTION = 0x010E
 
 
 def _effect_json(effect: Effect) -> dict:
-    """La forme n'est écrite que si elle sort de l'ordinaire : les images
-    d'avant les formes de trame restent relisibles à l'identique."""
+    """Forme et angle ne sont écrits que s'ils sortent de l'ordinaire : les
+    images d'avant restent relisibles à l'identique."""
     payload = {"name": effect.name, "strength": effect.strength}
     if effect.shape != "round":
         payload["shape"] = effect.shape
+    if effect.angle:
+        payload["angle"] = effect.angle
     return payload
 
 
 def _effect_from(raw: dict) -> Effect:
-    return Effect(raw["name"], float(raw["strength"]), raw.get("shape", "round"))
+    return Effect(raw["name"], float(raw["strength"]),
+                  raw.get("shape", "round"), float(raw.get("angle", 0.0)))
 
 
 def recipe_to_json(recipe: Recipe, **extra) -> str:
@@ -55,7 +58,6 @@ def recipe_to_json(recipe: Recipe, **extra) -> str:
         ],
         "saliency_threshold": recipe.saliency_threshold,
         "bleed": recipe.bleed,
-        "angle": recipe.angle,
         "full_frame": recipe.full_frame,
         "smoothness": recipe.smoothness,
         "edge_blur": recipe.edge_blur,
@@ -83,7 +85,6 @@ def recipe_from_json(raw: str, sources=None) -> Recipe:
         ),
         saliency_threshold=int(data.get("saliency_threshold", 60)),
         bleed=float(data.get("bleed", 0.0)),
-        angle=float(data.get("angle", 0.0)),
         full_frame=bool(data.get("full_frame", False)),
         smoothness=float(data.get("smoothness", 3.0)),
         edge_blur=int(data.get("edge_blur", 0)),

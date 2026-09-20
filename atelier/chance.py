@@ -109,6 +109,12 @@ NEWCOMERS = ((0.12, "pixelsort", 0.02, 0.08), (0.10, "shift", 0.004, 0.015),
 SHAPES = ("round", "square", "diamond", "line", "cross", "ellipse", "euclidean")
 SHAPE_WEIGHTS = (80.0, 3.0, 3.0, 3.0, 3.0, 4.0, 4.0)
 
+# Les matières qui travaillent par lignes acceptent un axe. Le corpus est
+# entièrement à l'horizontale — l'original ne savait pas incliner —, donc le
+# tirage n'incline qu'une fois sur quatre, et chaque matière séparément.
+ANGLED = ("halftone", "pixelsort", "mosh", "shift")
+ANGLE_CHANCE = 0.25
+
 SOURCES_RANGE = (2, 4)
 
 
@@ -117,7 +123,9 @@ def draw_effects(family: str, rng: random.Random) -> tuple[Effect, ...]:
     def matiere(name: str, low: float, high: float) -> Effect:
         shape = (rng.choices(SHAPES, weights=SHAPE_WEIGHTS, k=1)[0]
                  if name == "halftone" else "round")
-        return Effect(name, rng.uniform(low, high), shape)
+        angle = (float(rng.randrange(0, 180, 5))
+                 if name in ANGLED and rng.random() < ANGLE_CHANCE else 0.0)
+        return Effect(name, rng.uniform(low, high), shape, angle)
 
     profile = PROFILES[family]
     effects = [matiere(*profile["always"])]
@@ -166,6 +174,9 @@ def random_recipe(available: list[str], rng: random.Random | None = None,
 
     return Recipe(
         sources=tuple(chosen),
+        # Les matières discrètes ont besoin de déborder pour se voir ; le
+        # corpus, lui, ne débordait pas. On reste donc du côté modeste.
+        bleed=rng.uniform(0.0, 0.45),
         # La graine vient du tirage : un rng donné rejoue le même tirage entier.
         seed=rng.randrange(2 ** 31),
         effects=effects,

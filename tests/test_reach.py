@@ -151,8 +151,8 @@ class TestTheAngleTurnsTheMaterials:
 
         def rendu(angle):
             return render(
-                Recipe(sources=tuple(chemins), seed=7, bleed=0.8, angle=angle,
-                       effects=(Effect(nom, force, forme),)),
+                Recipe(sources=tuple(chemins), seed=7, bleed=0.8,
+                       effects=(Effect(nom, force, forme, angle),)),
                 size=400, sources=images)
 
         droit = rendu(0)
@@ -166,8 +166,8 @@ class TestTheAngleTurnsTheMaterials:
 
         def rendu(angle, forme):
             return render(
-                Recipe(sources=tuple(chemins), seed=7, bleed=0.8, angle=angle,
-                       effects=(Effect("halftone", 0.016, forme),)),
+                Recipe(sources=tuple(chemins), seed=7, bleed=0.8,
+                       effects=(Effect("halftone", 0.016, forme, angle),)),
                 size=400, sources=images)
 
         ligne = ecart(rendu(90, "line"), rendu(0, "line"))
@@ -179,23 +179,39 @@ class TestTheAngleTurnsTheMaterials:
 
         def rendu(angle):
             return render(
-                Recipe(sources=tuple(chemins), seed=7, bleed=0.5, angle=angle,
-                       effects=(Effect("halftone", 0.016, "line"),)),
+                Recipe(sources=tuple(chemins), seed=7, bleed=0.5,
+                       effects=(Effect("halftone", 0.016, "line", angle),)),
                 size=300, sources=images)
 
         assert np.array_equal(rendu(0), rendu(180))
 
-    def test_an_angle_alone_changes_nothing(self, photos):
-        """Sans matière qui tourne, l'angle ne doit rien déplacer."""
+    def test_an_angle_on_a_still_material_changes_nothing(self, photos):
+        """Le bitmap ne travaille pas par lignes : son axe ne doit rien faire."""
         chemins, images = photos
         droit = Recipe(sources=tuple(chemins), seed=7,
                        effects=(Effect("bitmap", 0.8),))
-        tourne = Recipe(sources=tuple(chemins), seed=7, angle=45,
-                        effects=(Effect("bitmap", 0.8),))
+        tourne = Recipe(sources=tuple(chemins), seed=7,
+                        effects=(Effect("bitmap", 0.8, "round", 45),))
         assert np.array_equal(
             render(droit, size=300, sources=images),
             render(tourne, size=300, sources=images),
         )
+
+    def test_each_material_keeps_its_own_axis(self, photos):
+        """Le point de tout : une trame inclinée sur un tri à l'horizontale."""
+        chemins, images = photos
+
+        def rendu(axe_trame, axe_mosh):
+            return render(
+                Recipe(sources=tuple(chemins), seed=7, bleed=0.8, effects=(
+                    Effect("mosh", 0.03, "round", axe_mosh),
+                    Effect("halftone", 0.016, "line", axe_trame))),
+                size=400, sources=images)
+
+        assert not np.array_equal(rendu(45, 0), rendu(45, 45)), \
+            "changer le seul axe du tri doit changer l'image"
+        assert not np.array_equal(rendu(0, 45), rendu(45, 45)), \
+            "changer le seul axe de la trame doit changer l'image"
 
 
 class TestFraming:
@@ -264,17 +280,25 @@ class TestEdgesOnly:
 
 class TestTheSettingsTravel:
     def test_they_survive_the_metadata(self, tmp_path):
-        recipe = Recipe(sources=("a.jpg",), seed=8, bleed=0.65, angle=37.5,
-                        full_frame=True, effects=(Effect("mosh", 0.03),))
+        recipe = Recipe(sources=("a.jpg",), seed=8, bleed=0.65, full_frame=True,
+                        effects=(Effect("mosh", 0.03, "round", 37.5),
+                                 Effect("halftone", 0.01, "line", 120.0)))
         back = read_recipe(save_with_recipe(
             np.zeros((32, 32, 3), np.uint8), tmp_path / "o.png", recipe))
         assert back.bleed == pytest.approx(0.65)
-        assert back.angle == pytest.approx(37.5)
         assert back.full_frame is True
+        assert [e.angle for e in back.effects] == [37.5, 120.0], \
+            "chaque matière doit retrouver son propre axe"
 
     def test_older_images_keep_the_old_behaviour(self):
         from atelier.metadata import recipe_from_json
-        back = recipe_from_json('{"seed": 1}')
+        back = recipe_from_json(
+            '{"seed": 1, "effects": [{"name": "mosh", "strength": 0.03}]}')
         assert back.bleed == 0.0
-        assert back.angle == 0.0
         assert back.full_frame is False
+        assert back.effects[0].angle == 0.0
+
+    def test_a_flat_angle_is_not_written_out(self):
+        from atelier.metadata import recipe_to_json
+        recipe = Recipe(sources=("a",), seed=1, effects=(Effect("mosh", 0.03),))
+        assert '"angle"' not in recipe_to_json(recipe)

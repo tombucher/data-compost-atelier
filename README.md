@@ -104,6 +104,19 @@ propres à chaque canal.
 Les matières qui réordonnent sans changer les valeurs — les deux tris — ont
 besoin de **bavure** pour se voir ; voir plus bas.
 
+### L'axe des matières
+
+La trame, les deux tris et le décalage de canaux travaillent par lignes, et
+chacun porte **son propre axe**, réglable sous lui. Une trame ligne à 45° sur
+un datamoshing à l'horizontale est une combinaison qu'un angle commun
+interdirait — c'est d'ailleurs ainsi que fonctionne une trame couleur, où
+chaque encre a le sien. Les autres matières n'ont pas d'axe et le réglage
+n'apparaît pas.
+
+L'image est tournée, la matière appliquée, puis l'image remise d'aplomb. La
+double interpolation adoucit un peu le résultat, et ne se paie qu'en dehors
+de l'horizontale.
+
 Les forces marquées d'un grain — pixellisation, trame, tri, décalage — sont
 exprimées en fraction de la toile, pas en pixels : elles gardent la même
 allure à toutes les tailles. L'interface les affiche converties au format
@@ -134,12 +147,6 @@ s'en sortait — elle passe l'image en noir et blanc — mais un tri de pixels o
 un tri par canaux, qui réordonnent sans changer les valeurs, se noyaient au
 point de paraître sans effet. À 1, les matières couvrent toute l'image,
 sujet compris.
-
-**Angle** incline les matières qui travaillent par lignes : la trame, les
-deux tris, le décalage de canaux. L'image est tournée, la matière appliquée,
-puis l'image remise d'aplomb ; la double interpolation adoucit un peu le
-résultat, et ne se paie qu'en dehors de l'horizontale. Les autres matières
-n'en tiennent pas compte.
 
 ### Le cadrage
 

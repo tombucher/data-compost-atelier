@@ -151,6 +151,11 @@
   .note.bloc { margin: -8px 0 14px; padding-left: 8px; border-left: 2px solid var(--bord); }
   .note.bloc.alerte { border-left-color: var(--accent); color: #c5b98c; }
 
+  /* L'axe d'une matière se range sous elle, en retrait : c'est un réglage
+     de second rang, pas une matière de plus. */
+  .sous-reglage { margin: 6px 0 0 12px; border-left: 1px solid var(--bord); padding-left: 8px; }
+  .sous-reglage label { font-size: 11px; color: var(--discret); }
+
   /* Infobulle : le panneau défile, donc la bulle est posée en position fixe
      par le script plutôt qu'en absolu, qui serait rogné. */
   /* Le point d'interrogation est un bouton, en bout de ligne, et la bulle
@@ -245,10 +250,6 @@
     <div class="ligne"><label for="bavure">Bavure</label><span class="valeur" id="v-bavure"></span></div>
     <input type="range" id="bavure" min="0" max="1" step="0.05" value="0">
   </div>
-  <div class="effet">
-    <div class="ligne"><label for="angle">Angle</label><span class="valeur" id="v-angle"></span></div>
-    <input type="range" id="angle" min="0" max="175" step="5" value="0">
-  </div>
 
   <h2>Le temps</h2>
   <div class="note bloc" id="note-temps"></div>
@@ -325,6 +326,11 @@
 </aside>
 
 <script>
+// Les matières qui travaillent par lignes acceptent un axe, et chacune a le
+// sien : une trame à 45° sur un tri à l'horizontale est une combinaison
+// qu'un angle commun interdirait.
+const EFFETS_ANGLE = ['halftone', 'pixelsort', 'mosh', 'shift'];
+
 // `enPixels` marque les forces exprimées en fraction de toile : elles se
 // lisent mieux converties au format visé.
 const EFFETS = [
@@ -360,7 +366,7 @@ const AIDES = {
 
   // Saillance
   bavure: "De combien les matières débordent de la zone calme. À zéro elles s'y tiennent — or cette zone ne porte que 14 % du poids de la composition, et un tri s'y noie. En montant, elles gagnent le sujet et se voient enfin.",
-  angle: "Incline les matières qui travaillent par lignes : la trame — surtout en ligne —, les deux tris et le décalage RVB. Les autres n'en tiennent pas compte.",
+
   seuil: "Quelle part de l'image les matières attaquent, en partant des zones les plus calmes. À 100 %, tout y passe, sujet compris. À 0, rien n'est touché.",
   lissage: "Adoucit la carte de saillance avant de s'en servir. Au minimum, les zones dégradées ont des bords hachés ; en montant, elles se fondent dans le reste.",
   bords: "Ne garde que le pourtour des zones saillantes, au lieu de leur intérieur. L'image se réduit à un liseré autour de son sujet — le centre disparaît de la composition.",
@@ -440,7 +446,7 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') fermerAide()
 
 function reglagesNeufs() {
   return Object.fromEntries(EFFETS.map(
-    e => [e.cle, { actif:false, force:e.defaut, forme:'round' }]));
+    e => [e.cle, { actif:false, force:e.defaut, forme:'round', angle:0 }]));
 }
 
 // Les réglages de l'axe, tels que le serveur les attend. Curseurs et cases
@@ -483,19 +489,31 @@ function batirEffets() {
       ${e.cle === 'halftone' ? `<select id="forme-halftone" style="margin-top:6px" disabled>`
         + FORMES.map(([cle, nom]) => `<option value="${cle}">trame ${nom}</option>`).join('')
         + `</select>` : ''}
+      ${EFFETS_ANGLE.includes(e.cle) ? `
+      <div class="sous-reglage">
+        <div class="ligne"><label for="a-${e.cle}">axe</label><span class="valeur" id="va-${e.cle}"></span></div>
+        <input type="range" id="a-${e.cle}" min="0" max="175" step="5" value="0" disabled>
+      </div>` : ''}
     </div>`).join('');
 
   EFFETS.forEach(e => {
     const bascule = $(`#on-${e.cle}`), curseur = $(`#f-${e.cle}`);
+    const axe = $(`#a-${e.cle}`);
     bascule.onchange = () => {
       reglagesCourants()[e.cle].actif = bascule.checked;
       curseur.disabled = !bascule.checked;
+      if (axe) axe.disabled = !bascule.checked;
       afficherValeur(e); peindreChoix(); demanderRendu();
       if (e.cle === 'halftone') $('#forme-halftone').disabled = !bascule.checked;
     };
     curseur.oninput = () => {
       reglagesCourants()[e.cle].force = parseFloat(curseur.value);
       afficherValeur(e); demanderRendu();
+    };
+    if (axe) axe.oninput = () => {
+      reglagesCourants()[e.cle].angle = parseFloat(axe.value);
+      $(`#va-${e.cle}`).textContent = axe.value + '°';
+      demanderRendu();
     };
     afficherValeur(e);
   });
@@ -509,6 +527,8 @@ function batirEffets() {
 function afficherValeur(e) {
   const { actif, force } = reglagesCourants()[e.cle];
   const champ = $(`#v-${e.cle}`);
+  const axe = $(`#va-${e.cle}`);
+  if (axe) axe.textContent = actif ? (reglagesCourants()[e.cle].angle || 0) + '°' : '';
   if (!actif) { champ.textContent = ''; return; }
   // Une fraction de toile se lit mal : on la montre en pixels sur le format visé
   champ.textContent = e.enPixels
@@ -604,6 +624,12 @@ function peindreEffets() {
     $(`#on-${e.cle}`).checked = reglages[e.cle].actif;
     $(`#f-${e.cle}`).value = reglages[e.cle].force;
     $(`#f-${e.cle}`).disabled = !reglages[e.cle].actif;
+    const axe = $(`#a-${e.cle}`);
+    if (axe) {
+      axe.value = reglages[e.cle].angle || 0;
+      axe.disabled = !reglages[e.cle].actif;
+      $(`#va-${e.cle}`).textContent = reglages[e.cle].actif ? axe.value + '°' : '';
+    }
     afficherValeur(e);
   });
   $('#forme-halftone').value = reglages.halftone.forme || 'round';
@@ -638,12 +664,11 @@ function appliquer(r) {
   $('#graine').value = r.seed;
   $('#seuil').value = r.threshold;
   if (r.bleed !== undefined) $('#bavure').value = r.bleed;
-  if (r.angle !== undefined) $('#angle').value = r.angle;
   if (r.full_frame !== undefined) poserCadrage(r.full_frame);
   $('#lissage').value = r.smoothness;
   $('#bords').value = r.edge_blur;
   $('#debordement').checked = r.overflow;
-  ['seuil', 'lissage', 'bords', 'bavure', 'angle'].forEach(id => {
+  ['seuil', 'lissage', 'bords', 'bavure'].forEach(id => {
     $('#v-' + id).textContent = UNITES[id] ? UNITES[id]($('#' + id).value) : $('#' + id).value;
   });
 
@@ -653,6 +678,7 @@ function appliquer(r) {
       actif: actifs[e.cle] !== undefined,
       force: actifs[e.cle]?.strength ?? e.defaut,
       forme: actifs[e.cle]?.shape ?? 'round',
+      angle: actifs[e.cle]?.angle ?? 0,
     }]));
   };
   etat.effets = versReglages(r.effects);
@@ -678,6 +704,7 @@ function enListe(reglages) {
   return EFFETS.filter(e => reglages[e.cle].actif).map(e => ({
     name: e.cle, strength: reglages[e.cle].force,
     shape: reglages[e.cle].forme || 'round',
+    angle: reglages[e.cle].angle || 0,
   }));
 }
 
@@ -690,7 +717,6 @@ function corps(extra = {}) {
       chemin => etat.propres[chemin] ? enListe(etat.propres[chemin]) : null),
     threshold: parseInt($('#seuil').value),
     bleed: parseFloat($('#bavure').value),
-    angle: parseFloat($('#angle').value),
     full_frame: etat.pleinCadre,
     smoothness: parseFloat($('#lissage').value),
     edge_blur: parseInt($('#bords').value),
@@ -844,9 +870,8 @@ function montrerTemps() {
 }
 
 // --- branchements -----------------------------------------------------------
-const UNITES = { seuil: v => v + ' %', bavure: v => Math.round(v * 100) + ' %',
-                 angle: v => v + '°' };
-['seuil', 'lissage', 'bords', 'bavure', 'angle'].forEach(id => {
+const UNITES = { seuil: v => v + ' %', bavure: v => Math.round(v * 100) + ' %' };
+['seuil', 'lissage', 'bords', 'bavure'].forEach(id => {
   const el = $('#' + id);
   const montrer = () => {
     $('#v-' + id).textContent = UNITES[id] ? UNITES[id](el.value) : el.value;

@@ -57,6 +57,10 @@ class Effect:
     strength: float
     # La forme du point de trame. Sans effet pour les autres matières.
     shape: str = "round"
+    # L'inclinaison, en degrés, pour les matières qui travaillent par lignes.
+    # Propre à chaque matière : une trame à 45° sur un tri à l'horizontale
+    # est une combinaison qu'un angle commun interdirait.
+    angle: float = 0.0
 
     def pixels(self, canvas: int, minimum: int = 2) -> int:
         """Convertit la force en pixels pour une toile donnée."""
@@ -87,9 +91,6 @@ class Recipe:
     # moins dans la composition, et tout ce qui ne transforme pas
     # radicalement — un tri, un décalage — s'y noie.
     bleed: float = 0.0
-    # L'angle, en degrés, des matières qui en ont un : la trame, le tri par
-    # canaux, le décalage de canaux.
-    angle: float = 0.0
     # Le cadrage. Par défaut, chaque image est posée entière dans la toile,
     # ce qui laisse le fond noir autour — c'est la composition de 2024. En
     # plein cadre, elle est agrandie jusqu'à couvrir la toile et déborde : il
@@ -371,11 +372,10 @@ def apply_effects(
     result = image
 
     for effect in (recipe.effects if effects is None else effects):
-        # L'angle de la recette, pour les matières qui travaillent par
-        # lignes : la trame, les deux tris, le décalage de canaux.
+        # Chaque matière porte son propre axe.
         from atelier.video import along_angle
 
-        angle = float(recipe.angle) % 180.0
+        angle = float(effect.angle) % 180.0
 
         if effect.name == "pixelate":
             result = apply_pixelate(result, quiet, effect.pixels(canvas))
@@ -408,7 +408,7 @@ def apply_effects(
             result = shift_channels(
                 result, effect.pixels(canvas, minimum=1),
                 random.Random(f"{recipe.seed}:shift"),
-                angle if recipe.angle else None,
+                angle if effect.angle else None,
             )
         elif effect.name == "mosh":
             # Le tri canal par canal : c'est lui qui sépare les couleurs.

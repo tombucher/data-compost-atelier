@@ -211,7 +211,8 @@ def recipe_from_request(body: dict, library: Library) -> tuple[Recipe, list]:
         raise ValueError("aucune image choisie")
 
     def matiere(e) -> Effect:
-        return Effect(e["name"], float(e["strength"]), e.get("shape", "round"))
+        return Effect(e["name"], float(e["strength"]), e.get("shape", "round"),
+                      float(e.get("angle", 0.0)))
 
     effects = tuple(matiere(e) for e in body.get("effects", []) if e.get("name"))
 
@@ -228,7 +229,6 @@ def recipe_from_request(body: dict, library: Library) -> tuple[Recipe, list]:
         per_image=tuple(group(g) for g in body.get("per_image", [])),
         saliency_threshold=int(body.get("threshold", 60)),
         bleed=float(body.get("bleed", 0.0)),
-        angle=float(body.get("angle", 0.0)),
         full_frame=bool(body.get("full_frame", False)),
         smoothness=float(body.get("smoothness", 3.0)),
         edge_blur=int(body.get("edge_blur", 0)),
@@ -241,7 +241,8 @@ AXE_KEYS = tuple(decay_payload(Decay())) + ("moment",)
 
 
 def _matiere_json(effect: Effect) -> dict:
-    return {"name": effect.name, "strength": effect.strength, "shape": effect.shape}
+    return {"name": effect.name, "strength": effect.strength,
+            "shape": effect.shape, "angle": effect.angle}
 
 
 def recipe_payload(recipe, sources=None, extra: dict | None = None) -> dict:
@@ -258,7 +259,6 @@ def recipe_payload(recipe, sources=None, extra: dict | None = None) -> dict:
         ],
         "threshold": recipe.saliency_threshold,
         "bleed": recipe.bleed,
-        "angle": recipe.angle,
         "full_frame": recipe.full_frame,
         "smoothness": recipe.smoothness,
         "edge_blur": recipe.edge_blur,
