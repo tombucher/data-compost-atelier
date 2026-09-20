@@ -45,11 +45,9 @@
   }
   .marque { font-weight: 600; font-size: 15px; letter-spacing: -0.01em; }
   /* Le menu de veine ne règle que le bouton voisin : ils forment un objet. */
-  .tirage-hasard { display: flex; }
-  .tirage-hasard .pousse { border-radius: 3px 0 0 3px; }
+  .tirage-hasard { display: flex; gap: 5px; align-items: center; }
   .tirage-hasard select {
-    width: auto; border-radius: 0 3px 3px 0; border-left: 0;
-    background: #4A5410; color: #EDF5C0; border-color: var(--ferment);
+    width: auto; border-color: #6B7A1C; color: #DCE79B;
   }
   .marque span { color: var(--braise); }
   .bandeau .grandit { flex: 1; }
@@ -152,11 +150,28 @@
     position: absolute; inset: 0; pointer-events: none;
     border: 1px dashed var(--ferment);
   }
-  #outils-cadre { align-items: center; gap: 8px; }
+  /* Tout ce qui touche au cadre se tient au même endroit, sous l'aperçu :
+     comment les images occupent la toile, et quelle part on en tire. */
+  .barre-cadre { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .barre-cadre .separe {
+    width: 1px; height: 20px; background: var(--radicelle);
+  }
+  .barre-cadre .dit { font-size: 11px; color: var(--ferment); }
   /* `display: block` l'emporterait sur l'attribut hidden, et l'image
      cassée resterait visible tant qu'aucune composition n'est rendue. */
   [hidden] { display: none !important; }
-  #apercu.attente { opacity: .5; }
+  #apercu.attente { opacity: .45; }
+  /* Une barre vivante en haut de l'aperçu pendant le calcul : l'opacité
+     seule ne distingue pas un rendu en cours d'un rendu terminé pâle. */
+  .scene-apercu.attente::after {
+    content: ""; position: absolute; left: 0; right: 0; top: 0; height: 2px;
+    background: linear-gradient(90deg, transparent, var(--ferment), transparent);
+    animation: passe 1.1s linear infinite;
+  }
+  @keyframes passe {
+    from { transform: translateX(-100%); }
+    to { transform: translateX(100%); }
+  }
   .vide { color: var(--spore); text-align: center; max-width: 34ch; line-height: 1.6; }
   .vide strong { color: var(--mycelium); font-weight: 500; display: block; margin-bottom: 4px; }
 
@@ -341,12 +356,6 @@
       <h2>La pile <em id="compte-pile"></em></h2>
       <p class="note" id="note-pile">Prenez des images ci-dessous. La dernière posée se décompose la première.</p>
       <div class="pile" id="pile"></div>
-      <div class="duo" id="cadrage" style="margin-top:8px">
-        <button data-cadre="pose" class="tenu" style="flex:1">Dans le cadre</button>
-        <button data-cadre="plein" style="flex:1">Plein cadre</button>
-      </div>
-      <p class="note" style="margin-top:6px">Posées entières dans la toile, le
-      fond visible autour ; ou agrandies jusqu'à la couvrir.</p>
     </section>
 
     <section>
@@ -367,10 +376,15 @@
       <div class="cadre" id="cadre" hidden></div>
       <div class="voile" id="voile" hidden></div>
     </div>
-    <div class="rangee" id="outils-cadre" hidden>
+    <div class="barre-cadre" id="outils-cadre" hidden>
+      <div class="duo" id="cadrage" title="Comment les images occupent la toile">
+        <button data-cadre="pose" class="tenu">Dans le cadre</button>
+        <button data-cadre="plein">Plein cadre</button>
+      </div>
+      <span class="separe"></span>
       <button id="recadrer">Recadrer</button>
       <button id="decadrer" hidden>Tout le cadre</button>
-      <span class="etat" id="dit-cadre"></span>
+      <span class="dit" id="dit-cadre"></span>
     </div>
     <div class="vide" id="vide">
       <strong>Rien sur l'établi.</strong>
@@ -581,6 +595,7 @@ function reglagesNeufs() {
 const etat = {
   totalFrames: 48, pleinCadre: false,
   cadre: null,               // la part de toile qu'on garde, en fractions
+  trace: false,              // on est en train de la dessiner
   disponibles: [], choisies: [],
   effets: reglagesNeufs(),   // réglage commun
   propres: {},               // réglages propres, par chemin d'image
@@ -891,7 +906,9 @@ function corps(extra = {}) {
     edge_blur: parseInt($('#bords').value),
     bleed: parseFloat($('#bavure').value),
     full_frame: etat.pleinCadre,
-    crop: etat.cadre,
+    // Pendant le tracé, l'aperçu montre la toile entière : on a besoin de
+    // voir ce qu'on écarte pour placer le cadre.
+    crop: etat.trace ? null : etat.cadre,
     overflow: $('#debordement').checked,
     moment: parseInt($('#temps').value),
     fps: 24,
@@ -919,8 +936,15 @@ async function rendre() {
   if (enCours) { aRefaire = true; return; }   // une seule requête à la fois
   enCours = true;
   $('#apercu').classList.add('attente');
+  $('#scene-apercu').classList.add('attente');
 
+  // Un datamoshing sur trois couches demande une seconde et demie : sans
+  // rien dire, l'attente passe pour un blocage.
   const depart = performance.now();
+  const compteur = setInterval(() => {
+    $('#etat').textContent =
+      `calcul… ${((performance.now() - depart) / 1000).toFixed(1)} s`;
+  }, 200);
   try {
     const r = await fetch('/api/render', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -948,8 +972,10 @@ async function rendre() {
   } catch (e) {
     $('#etat').textContent = e.message;
   } finally {
+    clearInterval(compteur);
     enCours = false;
     $('#apercu').classList.remove('attente');
+    $('#scene-apercu').classList.remove('attente');
     if (aRefaire) { aRefaire = false; rendre(); }
   }
 }
@@ -1081,14 +1107,25 @@ function appliquer(r) {
 // que cette part sorte à la définition demandée.
 let cadreEnCours = null;
 
+function quitterLeTrace() {
+  etat.trace = false;
+  $('#scene-apercu').classList.remove('tracable');
+  $('#voile').hidden = true;
+  $('#recadrer').classList.remove('pousse');
+  $('#recadrer').textContent = etat.cadre ? 'Retracer' : 'Recadrer';
+  montrerCadre();
+}
+
 function montrerCadre() {
   const c = etat.cadre;
-  $('#cadre').hidden = !c;
+  // Le cadre ne se dessine que pendant le tracé : une fois posé, l'aperçu
+  // montre directement la part gardée, il n'y a plus rien à encadrer.
+  $('#cadre').hidden = !c || !etat.trace;
   $('#decadrer').hidden = !c;
   $('#dit-cadre').textContent = c
     ? `cadre : ${Math.round(c[2] * 100)} % du côté`
     : '';
-  if (!c) return;
+  if (!c || !etat.trace) return;
   const vue = $('#apercu').getBoundingClientRect();
   const scene = $('#scene-apercu').getBoundingClientRect();
   const decX = vue.left - scene.left, decY = vue.top - scene.top;
@@ -1104,14 +1141,19 @@ function brancherCadre() {
   const vue = $('#apercu'), scene = $('#scene-apercu');
 
   $('#recadrer').onclick = () => {
-    const actif = scene.classList.toggle('tracable');
-    $('#voile').hidden = !actif;
-    $('#recadrer').classList.toggle('pousse', actif);
-    $('#recadrer').textContent = actif ? 'Tracer le cadre…' : 'Recadrer';
+    if (etat.trace) return quitterLeTrace(), rendre();
+    // Retracer suppose de revoir la toile entière : on la remontre le temps
+    // du tracé, puis l'aperçu revient sur la seule part gardée.
+    etat.trace = true;
+    scene.classList.add('tracable');
+    $('#voile').hidden = false;
+    $('#recadrer').classList.add('pousse');
+    $('#recadrer').textContent = 'Tracer…';
+    rendre();
   };
 
   $('#decadrer').onclick = () => {
-    etat.cadre = null; montrerCadre(); rendre();
+    etat.cadre = null; quitterLeTrace(); rendre();
   };
 
   const position = ev => {
@@ -1142,12 +1184,8 @@ function brancherCadre() {
   vue.onpointerup = () => {
     if (!cadreEnCours) return;
     cadreEnCours = null;
-    if (!etat.cadre || etat.cadre[2] < 0.06) { etat.cadre = null; }
-    scene.classList.remove('tracable');
-    $('#voile').hidden = true;
-    $('#recadrer').classList.remove('pousse');
-    $('#recadrer').textContent = 'Recadrer';
-    montrerCadre();
+    if (!etat.cadre || etat.cadre[2] < 0.06) etat.cadre = null;
+    quitterLeTrace();
     rendre();
   };
 

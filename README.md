@@ -83,9 +83,11 @@ posée s'ouvre sur ses réglages juste en dessous, sans changer de place dans
 la liste. Les sept formes de trame sont des pastilles montrant le motif exact
 que la trame produira.
 
-L'aperçu se recalcule en continu : sur trois images, comptez 0,2 s pour une
-composition simple, 0,6 s avec un tri, et environ 1 s pour un instant pris au
-milieu de l'axe.
+L'aperçu se recalcule en continu. Sur trois images, comptez 0,2 s au premier
+instant, 0,6 s au milieu de l'axe, et jusqu'à 1,5 s avec un datamoshing et de
+la bavure — c'est le tri par canaux qui coûte, et il coûte d'autant plus que
+la bavure élargit la zone à trier. Pendant le calcul, une barre passe en haut
+de l'aperçu et le compteur s'affiche sous lui.
 
 Quand une composition tient, choisir un format et **Tirer**. Le fichier part
 dans `sorties/`, avec sa recette à l'intérieur.
@@ -218,8 +220,8 @@ d'évidement, et la composition doit rester celle qu'on a réglée.
 
 ## Le cadrage
 
-Deux boutons sous la pile : ils disent comment les images de cette pile
-occupent la toile.
+Tout ce qui touche au cadre se tient sous l'aperçu. Deux boutons disent
+comment les images occupent la toile.
 
 **Dans le cadre** pose chaque image entière dans la toile, ce qui laisse le
 fond noir visible autour. C'est le réglage par défaut.
@@ -229,8 +231,10 @@ placement décide quelle part on garde, et il ne reste aucun fond.
 
 ### Recadrer la sortie
 
-**Recadrer**, sous l'aperçu, permet de tracer un carré sur la composition
-pour ne tirer que cette part. **Tout le cadre** revient en arrière.
+**Recadrer** fait revenir la toile entière le temps qu'on trace un carré
+dessus — il faut voir ce qu'on écarte pour le placer. Le tracé fini,
+l'aperçu ne montre plus que la part gardée. **Retracer** rouvre la toile,
+**Tout le cadre** revient en arrière.
 
 Ce n'est pas un rognage. Rogner une image déjà rendue perdrait la définition
 qu'on vient de demander. Le cadre dit quelle part de la toile on garde, et la
@@ -238,8 +242,8 @@ toile est alors calculée d'autant plus grande : un cadre de moitié sur un
 tirage de 4000 px fait calculer une toile de 8000, et la part gardée sort à
 4000 avec tout son détail. Un cadre serré coûte donc cher à tirer.
 
-L'aperçu, lui, montre toujours la toile entière avec le cadre par-dessus :
-c'est ce qui permet de l'ajuster, et de voir ce qu'on écarte.
+L'aperçu, lui, découpe sans agrandir la toile : la part gardée y perd du
+détail, mais le rendu reste assez vif pour qu'on travaille.
 
 ## L'axe du temps
 

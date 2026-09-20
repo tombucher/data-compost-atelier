@@ -561,9 +561,12 @@ class Handler(BaseHTTPRequestHandler):
         decay = decay_from_request(body)
         index = max(0, min(int(body.get("moment", 0)), count_frames(decay) - 1))
 
-        # L'aperçu montre la toile entière : le cadre s'y dessine par-dessus,
-        # pour qu'on voie aussi ce qu'on écarte. C'est le tirage qui découpe.
-        image = compose_at(recipe, decay, size, index, images)
+        # L'aperçu découpe sans agrandir la toile : la part gardée y perd du
+        # détail, mais le rendu reste assez vif pour qu'on travaille. Le
+        # tirage, lui, calcule la toile en grand. L'interface n'envoie pas
+        # de cadre pendant qu'on le trace, pour laisser voir ce qu'on écarte.
+        image = decouper(compose_at(recipe, decay, size, index, images),
+                         recipe.crop_clair(), size)
 
         payload = self._jpeg(image)
         self.send_response(200)
