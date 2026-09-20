@@ -106,6 +106,20 @@ class Recipe:
     # plein cadre, elle est agrandie jusqu'à couvrir la toile et déborde : il
     # ne reste pas de fond, comme sur une capture de vidéo.
     full_frame: bool = False
+    # Le cadre retenu dans la toile, en fractions : (gauche, haut, côté).
+    # None garde tout. Un cadre ne recadre pas une image déjà rendue : la
+    # toile entière est calculée plus grande, de sorte que la part gardée
+    # sorte à la définition demandée.
+    crop: tuple[float, float, float] | None = None
+
+    def crop_clair(self) -> tuple[float, float, float] | None:
+        """Le cadre ramené dans la toile, ou None s'il la couvre entière."""
+        if not self.crop:
+            return None
+        cote = float(np.clip(self.crop[2], 0.05, 1.0))
+        x = float(np.clip(self.crop[0], 0.0, 1.0 - cote))
+        y = float(np.clip(self.crop[1], 0.0, 1.0 - cote))
+        return None if cote >= 0.999 else (x, y, cote)
     smoothness: float = 3.0
     edge_blur: int = 0
     # Le débordement uint8 de la saturation, préservé tel quel : seize œuvres
@@ -532,6 +546,36 @@ def blend_into(canvas, weights, tile, weight, x: int, y: int) -> None:
     poids = weight[sy:sy + (y1 - y0), sx:sx + (x1 - x0)]
     canvas[y0:y1, x0:x1] += part * poids[:, :, None]
     weights[y0:y1, x0:x1] += poids
+
+
+def toile_pour(recipe: Recipe, size: int) -> tuple[int, tuple | None]:
+    """La taille de toile à calculer pour qu'un cadre sorte à `size`.
+
+    Garder la moitié de la toile demande de la rendre deux fois plus
+    grande : c'est ce qui distingue un cadre d'un simple rognage, qui
+    perdrait la définition qu'on vient de demander.
+    """
+    cadre = recipe.crop_clair()
+    if cadre is None:
+        return size, None
+    return max(size, int(round(size / cadre[2]))), cadre
+
+
+def decouper(toile: np.ndarray, cadre, size: int) -> np.ndarray:
+    """Extrait le cadre et le ramène exactement à `size`."""
+    if cadre is None:
+        return toile
+    cote_toile = toile.shape[0]
+    x, y, cote = cadre
+    x0, y0 = int(round(x * cote_toile)), int(round(y * cote_toile))
+    large = max(1, int(round(cote * cote_toile)))
+    x0 = min(x0, cote_toile - large)
+    y0 = min(y0, cote_toile - large)
+    part = toile[y0:y0 + large, x0:x0 + large]
+    if part.shape[0] != size:
+        part = cv2.resize(part, (size, size), interpolation=cv2.INTER_AREA
+                          if part.shape[0] > size else cv2.INTER_CUBIC)
+    return part
 
 
 def render(recipe: Recipe, size: int = PREVIEW_SIZE, sources=None,

@@ -426,3 +426,79 @@ class TestTheBleedActuallyBleeds:
         assert np.array_equal(*deux)
         assert self._pente_au_bord(deux[0]) > 80, \
             "à bavure nulle, le bord doit rester une coupure"
+
+
+class TestTheOutputFrame:
+    """Un cadre n'est pas un rognage.
+
+    Rogner une image déjà rendue perdrait la définition qu'on vient de
+    demander. Le cadre dit quelle part de la toile on garde, et la toile est
+    alors calculée d'autant plus grande : la part gardée sort à la taille
+    voulue, avec tout son détail.
+    """
+
+    def test_the_canvas_grows_with_a_tighter_frame(self):
+        from atelier.engine import toile_pour
+        moitie = Recipe(sources=("a",), seed=1, crop=(0.25, 0.25, 0.5))
+        quart = Recipe(sources=("a",), seed=1, crop=(0.3, 0.3, 0.25))
+        assert toile_pour(moitie, 4000)[0] == 8000
+        assert toile_pour(quart, 4000)[0] == 16000
+        assert toile_pour(Recipe(sources=("a",), seed=1), 4000)[0] == 4000
+
+    def test_the_frame_comes_out_at_the_asked_size(self, photos):
+        from atelier.engine import decouper, toile_pour
+        chemins, images = photos
+        recipe = Recipe(sources=tuple(chemins), seed=9, crop=(0.2, 0.2, 0.4),
+                        effects=(Effect("halftone", 0.012),))
+        toile, cadre = toile_pour(recipe, 500)
+        sortie = decouper(render(recipe, size=toile, sources=images), cadre, 500)
+        assert sortie.shape == (500, 500, 3)
+
+    def test_the_frame_shows_the_right_part(self, photos):
+        """La zone tirée doit être celle qu'on a désignée, pas une autre."""
+        from atelier.engine import decouper, toile_pour
+        chemins, images = photos
+        nu = Recipe(sources=tuple(chemins), seed=9, effects=(Effect("halftone", 0.012),))
+        entier = render(nu, size=600, sources=images)
+
+        recipe = Recipe(sources=tuple(chemins), seed=9, crop=(0.25, 0.25, 0.4),
+                        effects=(Effect("halftone", 0.012),))
+        toile, cadre = toile_pour(recipe, 600)
+        sortie = decouper(render(recipe, size=toile, sources=images), cadre, 600)
+
+        # La même zone, prise dans le rendu entier puis agrandie
+        temoin = cv2.resize(entier[150:150 + 240, 150:150 + 240], (600, 600))
+        ailleurs = cv2.resize(entier[0:240, 0:240], (600, 600))
+        assert ecart(sortie, temoin) < ecart(sortie, ailleurs), \
+            "le cadre doit livrer la zone désignée"
+
+    @pytest.mark.parametrize("brut,attendu", [
+        ((0.0, 0.0, 1.0), None),          # couvre tout : pas un cadre
+        ((0.0, 0.0, 2.0), None),          # débordement ramené à tout
+        ((0.9, 0.9, 0.5), (0.5, 0.5, 0.5)),   # ramené dans la toile
+        ((-1.0, -1.0, 0.3), (0.0, 0.0, 0.3)),
+    ])
+    def test_a_frame_stays_inside_the_canvas(self, brut, attendu):
+        assert Recipe(sources=("a",), seed=1, crop=brut).crop_clair() == attendu
+
+    def test_no_frame_changes_nothing(self, photos):
+        chemins, images = photos
+        recipe = Recipe(sources=tuple(chemins), seed=9,
+                        effects=(Effect("halftone", 0.012),))
+        from atelier.engine import decouper, toile_pour
+        toile, cadre = toile_pour(recipe, 400)
+        assert cadre is None
+        assert np.array_equal(
+            decouper(render(recipe, size=toile, sources=images), cadre, 400),
+            render(recipe, size=400, sources=images),
+        )
+
+    def test_it_survives_the_metadata(self, tmp_path):
+        recipe = Recipe(sources=("a.jpg",), seed=4, crop=(0.1, 0.2, 0.55))
+        back = read_recipe(save_with_recipe(
+            np.zeros((32, 32, 3), np.uint8), tmp_path / "o.png", recipe))
+        assert back.crop == (0.1, 0.2, 0.55)
+
+    def test_older_images_have_no_frame(self):
+        from atelier.metadata import recipe_from_json
+        assert recipe_from_json('{"seed": 1}').crop is None

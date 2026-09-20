@@ -44,6 +44,13 @@
     border-bottom: 1px solid var(--radicelle);
   }
   .marque { font-weight: 600; font-size: 15px; letter-spacing: -0.01em; }
+  /* Le menu de veine ne règle que le bouton voisin : ils forment un objet. */
+  .tirage-hasard { display: flex; }
+  .tirage-hasard .pousse { border-radius: 3px 0 0 3px; }
+  .tirage-hasard select {
+    width: auto; border-radius: 0 3px 3px 0; border-left: 0;
+    background: #4A5410; color: #EDF5C0; border-color: var(--ferment);
+  }
   .marque span { color: var(--braise); }
   .bandeau .grandit { flex: 1; }
 
@@ -129,10 +136,23 @@
     display: flex; flex-direction: column; align-items: center;
     justify-content: center; gap: 16px; padding: 18px; min-height: 0;
   }
+  .scene-apercu { position: relative; line-height: 0; }
   #apercu {
-    max-width: 100%; max-height: calc(100vh - 215px);
+    max-width: 100%; max-height: calc(100vh - 250px);
     background: #000; display: block; box-shadow: 0 0 0 1px var(--radicelle);
   }
+  /* Tracer un cadre : ce qu'on garde reste clair, le reste s'assombrit. */
+  .scene-apercu.tracable #apercu { cursor: crosshair; }
+  .cadre {
+    position: absolute; border: 1px solid var(--ferment);
+    box-shadow: 0 0 0 9999px rgba(10, 8, 6, .62);
+    pointer-events: none;
+  }
+  .voile {
+    position: absolute; inset: 0; pointer-events: none;
+    border: 1px dashed var(--ferment);
+  }
+  #outils-cadre { align-items: center; gap: 8px; }
   /* `display: block` l'emporterait sur l'attribut hidden, et l'image
      cassée resterait visible tant qu'aucune composition n'est rendue. */
   [hidden] { display: none !important; }
@@ -307,18 +327,11 @@
   <div class="marque">Atelier<span>.</span></div>
   <select id="dossier" title="Où l'atelier prend ses images"></select>
   <div class="grandit"></div>
-  <div class="duo" id="cadrage">
-    <button data-cadre="pose" class="tenu">Dans le cadre</button>
-    <button data-cadre="plein">Plein cadre</button>
+  <div class="tirage-hasard">
+    <button class="pousse" id="hasard">Au hasard</button>
+    <select id="famille" aria-label="Veine du tirage"
+            title="Quelle matière le tirage met au centre. Elle sera toujours présente, mais rarement seule : le tirage lui adjoint souvent sa compagne habituelle."></select>
   </div>
-  <select id="famille" title="Dans quelle veine tirer">
-    <option value="">toutes veines</option>
-    <option value="halftone">trame</option>
-    <option value="bitmap">bitmap</option>
-    <option value="pixelate">pixellisation</option>
-    <option value="saturate">saturation</option>
-  </select>
-  <button class="pousse" id="hasard">Au hasard</button>
 </header>
 
 <div class="scene">
@@ -328,6 +341,12 @@
       <h2>La pile <em id="compte-pile"></em></h2>
       <p class="note" id="note-pile">Prenez des images ci-dessous. La dernière posée se décompose la première.</p>
       <div class="pile" id="pile"></div>
+      <div class="duo" id="cadrage" style="margin-top:8px">
+        <button data-cadre="pose" class="tenu" style="flex:1">Dans le cadre</button>
+        <button data-cadre="plein" style="flex:1">Plein cadre</button>
+      </div>
+      <p class="note" style="margin-top:6px">Posées entières dans la toile, le
+      fond visible autour ; ou agrandies jusqu'à la couvrir.</p>
     </section>
 
     <section>
@@ -343,7 +362,16 @@
   </aside>
 
   <main>
-    <img id="apercu" alt="Aperçu de la composition" hidden>
+    <div class="scene-apercu" id="scene-apercu" hidden>
+      <img id="apercu" alt="Aperçu de la composition">
+      <div class="cadre" id="cadre" hidden></div>
+      <div class="voile" id="voile" hidden></div>
+    </div>
+    <div class="rangee" id="outils-cadre" hidden>
+      <button id="recadrer">Recadrer</button>
+      <button id="decadrer" hidden>Tout le cadre</button>
+      <span class="etat" id="dit-cadre"></span>
+    </div>
     <div class="vide" id="vide">
       <strong>Rien sur l'établi.</strong>
       Prenez deux ou trois images dans le dossier, ou laissez le hasard choisir.
@@ -512,6 +540,7 @@ const AIDES = {
   even_dissolve: "Les seuils suivent les quantiles de la saillance, pour que la dissolution occupe tout l'axe. Décoché, l'image se vide en deux ou trois images.",
 
   graine: "Le nombre d'où sort toute la composition. Il ne sert qu'à revenir sur un tirage pour l'agrandir — il n'oblige à rien répéter.",
+  recadrer: "Trace un cadre sur l'aperçu pour ne garder qu'une part de la composition. Ce n'est pas un rognage : au tirage, la toile est calculée d'autant plus grande que le cadre est petit, pour que la part gardée sorte à la définition demandée.",
   taille: "La taille du tirage. L'aperçu reste petit pour rester vif ; c'est ici que se décide la définition du fichier écrit.",
 };
 
@@ -551,6 +580,7 @@ function reglagesNeufs() {
 
 const etat = {
   totalFrames: 48, pleinCadre: false,
+  cadre: null,               // la part de toile qu'on garde, en fractions
   disponibles: [], choisies: [],
   effets: reglagesNeufs(),   // réglage commun
   propres: {},               // réglages propres, par chemin d'image
@@ -861,6 +891,7 @@ function corps(extra = {}) {
     edge_blur: parseInt($('#bords').value),
     bleed: parseFloat($('#bavure').value),
     full_frame: etat.pleinCadre,
+    crop: etat.cadre,
     overflow: $('#debordement').checked,
     moment: parseInt($('#temps').value),
     fps: 24,
@@ -880,8 +911,9 @@ function demanderRendu() {
 
 async function rendre() {
   if (!etat.choisies.length) {
-    $('#apercu').hidden = true; $('#vide').hidden = false;
-    $('#axe').hidden = true; $('#etat').textContent = '';
+    $('#scene-apercu').hidden = true; $('#vide').hidden = false;
+    $('#axe').hidden = true; $('#outils-cadre').hidden = true;
+    $('#etat').textContent = '';
     return;
   }
   if (enCours) { aRefaire = true; return; }   // une seule requête à la fois
@@ -903,8 +935,10 @@ async function rendre() {
     const image = URL.createObjectURL(await r.blob());
     const vue = $('#apercu');
     if (vue.src) URL.revokeObjectURL(vue.src);
-    vue.src = image; vue.hidden = false;
-    $('#vide').hidden = true; $('#axe').hidden = false;
+    vue.src = image;
+    $('#scene-apercu').hidden = false; $('#vide').hidden = true;
+    $('#axe').hidden = false; $('#outils-cadre').hidden = false;
+    vue.decode().then(montrerCadre).catch(() => montrerCadre());
 
     const instant = parseInt($('#temps').value);
     $('#etat').textContent =
@@ -1010,6 +1044,7 @@ function appliquer(r) {
   $('#debordement').checked = r.overflow;
   if (r.bleed !== undefined) $('#bavure').value = r.bleed;
   if (r.full_frame !== undefined) poserCadrage(r.full_frame);
+  etat.cadre = r.crop ? r.crop.slice() : null;
 
   const versReglages = liste => {
     const actifs = Object.fromEntries((liste || []).map(e => [e.name, e]));
@@ -1037,6 +1072,86 @@ function appliquer(r) {
 
   peindreChoix();
   rendre();
+}
+
+// --- le cadre de sortie ---
+
+// Tracer un cadre ne rogne pas une image déjà faite : il dit quelle part de
+// la toile on garde, et le tirage calcule alors la toile assez grande pour
+// que cette part sorte à la définition demandée.
+let cadreEnCours = null;
+
+function montrerCadre() {
+  const c = etat.cadre;
+  $('#cadre').hidden = !c;
+  $('#decadrer').hidden = !c;
+  $('#dit-cadre').textContent = c
+    ? `cadre : ${Math.round(c[2] * 100)} % du côté`
+    : '';
+  if (!c) return;
+  const vue = $('#apercu').getBoundingClientRect();
+  const scene = $('#scene-apercu').getBoundingClientRect();
+  const decX = vue.left - scene.left, decY = vue.top - scene.top;
+  Object.assign($('#cadre').style, {
+    left: (decX + c[0] * vue.width) + 'px',
+    top: (decY + c[1] * vue.height) + 'px',
+    width: (c[2] * vue.width) + 'px',
+    height: (c[2] * vue.height) + 'px',
+  });
+}
+
+function brancherCadre() {
+  const vue = $('#apercu'), scene = $('#scene-apercu');
+
+  $('#recadrer').onclick = () => {
+    const actif = scene.classList.toggle('tracable');
+    $('#voile').hidden = !actif;
+    $('#recadrer').classList.toggle('pousse', actif);
+    $('#recadrer').textContent = actif ? 'Tracer le cadre…' : 'Recadrer';
+  };
+
+  $('#decadrer').onclick = () => {
+    etat.cadre = null; montrerCadre(); rendre();
+  };
+
+  const position = ev => {
+    const r = vue.getBoundingClientRect();
+    return [(ev.clientX - r.left) / r.width, (ev.clientY - r.top) / r.height];
+  };
+
+  vue.onpointerdown = ev => {
+    if (!scene.classList.contains('tracable')) return;
+    ev.preventDefault();
+    vue.setPointerCapture(ev.pointerId);
+    cadreEnCours = position(ev);
+  };
+
+  vue.onpointermove = ev => {
+    if (!cadreEnCours) return;
+    const [x, y] = position(ev);
+    // Toujours carré : la toile l'est, et un cadre libre déformerait
+    const cote = Math.max(Math.abs(x - cadreEnCours[0]), Math.abs(y - cadreEnCours[1]));
+    etat.cadre = [
+      Math.min(cadreEnCours[0], Math.max(0, cadreEnCours[0] - (x < cadreEnCours[0] ? cote : 0))),
+      Math.min(cadreEnCours[1], Math.max(0, cadreEnCours[1] - (y < cadreEnCours[1] ? cote : 0))),
+      Math.min(cote, 1),
+    ];
+    montrerCadre();
+  };
+
+  vue.onpointerup = () => {
+    if (!cadreEnCours) return;
+    cadreEnCours = null;
+    if (!etat.cadre || etat.cadre[2] < 0.06) { etat.cadre = null; }
+    scene.classList.remove('tracable');
+    $('#voile').hidden = true;
+    $('#recadrer').classList.remove('pousse');
+    $('#recadrer').textContent = 'Recadrer';
+    montrerCadre();
+    rendre();
+  };
+
+  window.addEventListener('resize', montrerCadre);
 }
 
 // --- l'axe ------------------------------------------------------------------
@@ -1185,7 +1300,17 @@ $('#hasard').onclick = async () => {
   }
 };
 
+// Les libellés disent « autour de » : la veine choisie est toujours au
+// centre du tirage, mais elle n'y est seule qu'une fois sur trois.
+$('#famille').innerHTML =
+  '<option value="">au hasard complet</option>'
+  + [['halftone', 'de la trame'], ['bitmap', 'du bitmap'],
+     ['pixelate', 'de la pixellisation'], ['saturate', 'de la saturation']]
+      .map(([cle, nom]) => `<option value="${cle}">autour ${nom}</option>`)
+      .join('');
+
 batirMatieres();
+brancherCadre();
 brancherAides();
 montrerMorsure();
 montrerTemps();

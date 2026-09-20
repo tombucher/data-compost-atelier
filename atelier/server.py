@@ -35,6 +35,8 @@ from atelier.chance import random_recipe
 from atelier.decay import Decay, compose_at, count_frames, sequence
 from atelier.engine import (
     EFFECTS,
+    decouper,
+    toile_pour,
     HALFTONE_SHAPES,
     Effect,
     Recipe,
@@ -289,6 +291,7 @@ def recipe_from_request(body: dict, library: Library,
         saliency_threshold=int(body.get("threshold", 60)),
         bleed=float(body.get("bleed", 0.0)),
         full_frame=bool(body.get("full_frame", False)),
+        crop=tuple(float(v) for v in body["crop"]) if body.get("crop") else None,
         smoothness=float(body.get("smoothness", 3.0)),
         edge_blur=int(body.get("edge_blur", 0)),
         saturation_overflow=bool(body.get("overflow", True)),
@@ -320,6 +323,7 @@ def recipe_payload(recipe, sources=None, extra: dict | None = None) -> dict:
         "threshold": recipe.saliency_threshold,
         "bleed": recipe.bleed,
         "full_frame": recipe.full_frame,
+        "crop": list(recipe.crop) if recipe.crop else None,
         "smoothness": recipe.smoothness,
         "edge_blur": recipe.edge_blur,
         "overflow": recipe.saturation_overflow,
@@ -557,6 +561,8 @@ class Handler(BaseHTTPRequestHandler):
         decay = decay_from_request(body)
         index = max(0, min(int(body.get("moment", 0)), count_frames(decay) - 1))
 
+        # L'aperçu montre la toile entière : le cadre s'y dessine par-dessus,
+        # pour qu'on voie aussi ce qu'on écarte. C'est le tirage qui découpe.
         image = compose_at(recipe, decay, size, index, images)
 
         payload = self._jpeg(image)
@@ -616,7 +622,9 @@ class Handler(BaseHTTPRequestHandler):
         decay = decay_from_request(body)
         size = int(body.get("size", 4000))
         index = max(0, min(int(body.get("moment", 0)), count_frames(decay) - 1))
-        image = compose_at(recipe, decay, size, index, images)
+        toile, cadre = toile_pour(recipe, size)
+        image = decouper(compose_at(recipe, decay, toile, index, images),
+                         cadre, size)
 
         self.output_dir.mkdir(parents=True, exist_ok=True)
         suffix = ".png" if body.get("format") == "png" else ".jpg"

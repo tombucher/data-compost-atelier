@@ -218,13 +218,28 @@ d'évidement, et la composition doit rester celle qu'on a réglée.
 
 ## Le cadrage
 
-Deux boutons en haut du panneau.
+Deux boutons sous la pile : ils disent comment les images de cette pile
+occupent la toile.
 
 **Dans le cadre** pose chaque image entière dans la toile, ce qui laisse le
 fond noir visible autour. C'est le réglage par défaut.
 
 **Plein cadre** l'agrandit jusqu'à couvrir la toile : elle déborde, le
 placement décide quelle part on garde, et il ne reste aucun fond.
+
+### Recadrer la sortie
+
+**Recadrer**, sous l'aperçu, permet de tracer un carré sur la composition
+pour ne tirer que cette part. **Tout le cadre** revient en arrière.
+
+Ce n'est pas un rognage. Rogner une image déjà rendue perdrait la définition
+qu'on vient de demander. Le cadre dit quelle part de la toile on garde, et la
+toile est alors calculée d'autant plus grande : un cadre de moitié sur un
+tirage de 4000 px fait calculer une toile de 8000, et la part gardée sort à
+4000 avec tout son détail. Un cadre serré coûte donc cher à tirer.
+
+L'aperçu, lui, montre toujours la toile entière avec le cadre par-dessus :
+c'est ce qui permet de l'ajuster, et de voir ce qu'on écarte.
 
 ## L'axe du temps
 
@@ -274,8 +289,13 @@ composition est intacte, et les bouger n'y change rien. Le panneau le dit.
 
 ## Au hasard
 
-Le bouton tire une composition entière — images, matières, réglages — et le
-menu voisin restreint le tirage à une veine.
+Le bouton tire une composition entière : images, matières, réglages.
+
+Le menu accolé choisit la **veine** du tirage, et le mot compte. « Autour de
+la trame » ne veut pas dire « rien que de la trame » : la veine choisie est
+toujours présente, mais elle n'est seule qu'une fois sur trois. Le reste du
+temps le tirage lui adjoint sa compagne habituelle — celle que le corpus lui
+associe le plus souvent.
 
 Le tirage n'est pas uniforme. Il suit les proportions d'un corpus de
 référence, mesuré sur quatre grandeurs : contraste, saturation, part de noir
