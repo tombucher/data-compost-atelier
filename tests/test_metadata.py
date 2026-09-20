@@ -109,3 +109,25 @@ class TestJsonShape:
     def test_json_is_compact(self, recipe):
         """La recette tient dans un champ de métadonnées, pas dans un fichier."""
         assert len(recipe_to_json(recipe)) < 400
+
+
+class TestPerImageInMetadata:
+    """Les réglages par image doivent voyager avec le tirage."""
+
+    def test_round_trip(self, tmp_path, image):
+        recipe = Recipe(
+            sources=("/x/a.jpg", "/x/b.jpg"), seed=11,
+            effects=(Effect("bitmap", 0.7),),
+            per_image=(None, (Effect("halftone", 0.012),)),
+        )
+        back = read_recipe(save_with_recipe(image, tmp_path / "o.png", recipe))
+        assert back.per_image[0] is None
+        assert [(e.name, e.strength) for e in back.per_image[1]] == [("halftone", 0.012)]
+
+    def test_an_empty_override_survives(self, tmp_path, image):
+        recipe = Recipe(sources=("/x/a.jpg",), seed=11, per_image=((),))
+        back = read_recipe(save_with_recipe(image, tmp_path / "o.png", recipe))
+        assert back.per_image == ((),), "une image volontairement intacte le reste"
+
+    def test_older_images_without_the_field_still_load(self):
+        assert recipe_from_json('{"seed": 1}').per_image == ()

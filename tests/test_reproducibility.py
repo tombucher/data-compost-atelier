@@ -123,3 +123,42 @@ class TestRobustness:
         big = cv2.resize(sources[0], (3000, 2400))
         out = render(Recipe(sources=("a.jpg",), seed=3), size=256, sources=[big])
         assert out.shape == (256, 256, 3)
+
+
+class TestPerImageEffects:
+    """Chaque image peut recevoir sa propre matière."""
+
+    def test_an_override_replaces_the_common_setting(self, sources):
+        from atelier.engine import effects_for
+        recipe = Recipe(
+            sources=("a", "b", "c"), seed=5,
+            effects=(Effect("bitmap", 0.7),),
+            per_image=(None, (Effect("halftone", 0.01),), None),
+        )
+        assert [e.name for e in effects_for(recipe, 0)] == ["bitmap"]
+        assert [e.name for e in effects_for(recipe, 1)] == ["halftone"]
+        assert [e.name for e in effects_for(recipe, 2)] == ["bitmap"]
+
+    def test_an_empty_override_means_no_effect(self):
+        """Laisser une image intacte pendant que les autres se dégradent."""
+        from atelier.engine import effects_for
+        recipe = Recipe(sources=("a", "b"), seed=5,
+                        effects=(Effect("bitmap", 0.7),), per_image=(None, ()))
+        assert effects_for(recipe, 1) == ()
+
+    def test_missing_entries_fall_back(self):
+        from atelier.engine import effects_for
+        recipe = Recipe(sources=("a", "b", "c"), seed=5,
+                        effects=(Effect("bitmap", 0.7),), per_image=(None,))
+        assert [e.name for e in effects_for(recipe, 2)] == ["bitmap"]
+
+    def test_the_render_actually_differs(self, sources):
+        commun = Recipe(sources=("a", "b", "c"), seed=5,
+                        effects=(Effect("bitmap", 0.9),))
+        mixte = Recipe(sources=("a", "b", "c"), seed=5,
+                       effects=(Effect("bitmap", 0.9),),
+                       per_image=(None, (Effect("halftone", 0.02),), None))
+        assert not np.array_equal(
+            render(commun, size=256, sources=sources),
+            render(mixte, size=256, sources=sources),
+        )

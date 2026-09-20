@@ -71,6 +71,53 @@ class Library:
         self._cache: dict[Path, np.ndarray] = {}
         self._lock = threading.Lock()
 
+    def move_to(self, raw: str):
+        """Change de dossier de travail sans relancer l'atelier.
+
+        Le cache d'images est vidé : une série chargée peut peser lourd, et
+        on ne revient pas forcément à la précédente.
+        """
+        target = Path(raw).expanduser().resolve()
+        if not target.is_dir():
+            raise ValueError(f"ce dossier n'existe pas : {raw}")
+        with self._lock:
+            self.root = target
+            self._cache.clear()
+
+    def neighbours(self) -> list[dict]:
+        """Dossiers voisins contenant des images, pour changer de série.
+
+        Le parent et les sous-dossiers du dossier courant : de quoi passer
+        d'une série à l'autre sans taper de chemin.
+        """
+        seen, found = set(), []
+        candidates = [self.root.parent]
+        try:
+            candidates += sorted(p for p in self.root.iterdir() if p.is_dir())
+            candidates += sorted(
+                p for p in self.root.parent.iterdir()
+                if p.is_dir() and p != self.root
+            )
+        except OSError:
+            pass
+
+        for path in candidates:
+            if path in seen or not path.is_dir():
+                continue
+            seen.add(path)
+            try:
+                count = sum(
+                    1 for f in path.iterdir()
+                    if f.is_file() and f.suffix.lower() in IMAGE_SUFFIXES
+                    and not f.name.startswith(".")
+                )
+            except OSError:
+                continue
+            if count:
+                found.append({"path": str(path), "name": path.name or str(path),
+                              "count": count})
+        return found[:30]
+
     def listing(self) -> list[dict]:
         if not self.root.is_dir():
             return []
@@ -143,10 +190,19 @@ def recipe_from_request(body: dict, library: Library) -> tuple[Recipe, list]:
         for e in body.get("effects", [])
         if e.get("name")
     )
+    def group(raw):
+        """Un réglage propre à une image, ou None pour suivre le commun."""
+        if raw is None:
+            return None
+        return tuple(
+            Effect(e["name"], float(e["strength"])) for e in raw if e.get("name")
+        )
+
     recipe = Recipe(
         sources=tuple(paths),
         seed=int(body.get("seed") or new_seed()),
         effects=effects,
+        per_image=tuple(group(g) for g in body.get("per_image", [])),
         saliency_threshold=int(body.get("threshold", 120)),
         smoothness=float(body.get("smoothness", 3.0)),
         edge_blur=int(body.get("edge_blur", 0)),
@@ -202,6 +258,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json({
                     "root": str(self.library.root),
                     "images": self.library.listing(),
+                    "neighbours": self.library.neighbours(),
                 })
             if route.path == "/api/thumbnail":
                 return self._thumbnail(unquote(query.get("path", [""])[0]))
@@ -224,6 +281,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._export()
             if route.path == "/api/frame":
                 return self._frame()
+            if route.path == "/api/folder":
+                return self._folder()
             if route.path == "/api/video":
                 return self._video()
             self._json({"error": "route inconnue"}, 404)
@@ -298,6 +357,11 @@ class Handler(BaseHTTPRequestHandler):
                     "seed": recipe.seed,
                     "effects": [{"name": e.name, "strength": e.strength}
                                 for e in recipe.effects],
+                    "per_image": [
+                        None if g is None
+                        else [{"name": e.name, "strength": e.strength} for e in g]
+                        for g in recipe.per_image
+                    ],
                     "threshold": recipe.saliency_threshold,
                     "smoothness": recipe.smoothness,
                     "edge_blur": recipe.edge_blur,
@@ -322,6 +386,16 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Cache-Control", "no-store")
         self.end_headers()
         self.wfile.write(payload)
+
+    def _folder(self):
+        """Change de dossier de travail."""
+        self.library.move_to(self._body().get("path", ""))
+        logger.info("dossier : %s", self.library.root)
+        self._json({
+            "root": str(self.library.root),
+            "images": self.library.listing(),
+            "neighbours": self.library.neighbours(),
+        })
 
     def _frame(self):
         """Une frame de la séquence, à la taille voulue.
@@ -406,16 +480,44 @@ class Handler(BaseHTTPRequestHandler):
         })
 
 
-def serve(root: Path, output: Path, port: int = 8765, open_browser: bool = True):
+DEFAULT_PORT = 8771
+
+
+def open_server(port: int, attempts: int = 10):
+    """Ouvre le serveur sur le premier port libre à partir de `port`.
+
+    Un port déjà pris — le plus souvent un atelier resté ouvert dans un autre
+    terminal — ne doit pas se solder par une trace d'erreur Python.
+    """
+    last = None
+    for candidate in range(port, port + attempts):
+        try:
+            return ThreadingHTTPServer(("127.0.0.1", candidate), Handler), candidate
+        except OSError as exc:
+            last = exc
+            if candidate == port:
+                logger.info("port %d déjà pris, je prends le suivant", port)
+    raise SystemExit(
+        f"Aucun port libre entre {port} et {port + attempts - 1} ({last}).\n"
+        f"Fermez l'atelier déjà ouvert, ou choisissez un port : --port 9000"
+    )
+
+
+def serve(root: Path, output: Path, port: int = DEFAULT_PORT, open_browser: bool = True):
     Handler.library = Library(root)
     Handler.output_dir = output.expanduser().resolve()
 
-    server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
+    server, port = open_server(port)
     address = f"http://127.0.0.1:{port}/"
 
     logger.info("atelier sur %s", address)
     logger.info("images   : %s", Handler.library.root)
     logger.info("tirages  : %s", Handler.output_dir)
+
+    if not Handler.library.root.is_dir():
+        logger.warning("ce dossier d'images n'existe pas")
+    elif not Handler.library.listing():
+        logger.warning("aucune image lisible dans ce dossier")
 
     if open_browser:
         threading.Timer(0.5, lambda: webbrowser.open(address)).start()
@@ -433,7 +535,7 @@ def main():
                         help="dossier des images sources")
     parser.add_argument("--sorties", default="sorties",
                         help="dossier où écrire les tirages")
-    parser.add_argument("--port", type=int, default=8771)
+    parser.add_argument("--port", type=int, default=DEFAULT_PORT)
     parser.add_argument("--sans-navigateur", action="store_true")
     args = parser.parse_args()
 

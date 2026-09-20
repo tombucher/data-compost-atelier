@@ -36,6 +36,11 @@ def recipe_to_json(recipe: Recipe, **extra) -> str:
         "seed": recipe.seed,
         "sources": [Path(s).name for s in recipe.sources],
         "effects": [{"name": e.name, "strength": e.strength} for e in recipe.effects],
+        "per_image": [
+            None if group is None
+            else [{"name": e.name, "strength": e.strength} for e in group]
+            for group in recipe.per_image
+        ],
         "saliency_threshold": recipe.saliency_threshold,
         "smoothness": recipe.smoothness,
         "edge_blur": recipe.edge_blur,
@@ -58,6 +63,11 @@ def recipe_from_json(raw: str, sources=None) -> Recipe:
         seed=int(data["seed"]),
         effects=tuple(
             Effect(e["name"], float(e["strength"])) for e in data.get("effects", ())
+        ),
+        per_image=tuple(
+            None if group is None
+            else tuple(Effect(e["name"], float(e["strength"])) for e in group)
+            for group in data.get("per_image", ())
         ),
         saliency_threshold=int(data.get("saliency_threshold", 120)),
         smoothness=float(data.get("smoothness", 3.0)),

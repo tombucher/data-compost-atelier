@@ -271,3 +271,77 @@ class TestSingleFrame:
         a = cv2.resize(small, (100, 100), interpolation=cv2.INTER_AREA).astype(float)
         b = cv2.resize(large, (100, 100), interpolation=cv2.INTER_AREA).astype(float)
         assert np.mean(np.abs(a - b)) < 40, "le même instant doit se reconnaître"
+
+
+class TestDissolve:
+    """La dissolution doit occuper toute la séquence, pas deux images."""
+
+    @pytest.fixture
+    def concentrated(self):
+        """Une carte comme en produit le résidu spectral.
+
+        Distribution exponentielle : l'essentiel près de zéro, une traîne
+        jusqu'au maximum. Mesuré sur les photographies du projet, médiane
+        0,02 et moyenne 0,04 pour un maximum à 1.
+        """
+        rng = np.random.default_rng(3)
+        field = rng.exponential(0.04, (128, 128))
+        field[60:70, 60:70] = 1.0
+        return np.clip(field * 255, 0, 255).astype(np.uint8)
+
+    def test_even_dissolve_spreads_over_the_sequence(self, concentrated):
+        parts = [m.mean() for m in mask_sequence(concentrated, 12, even=True)]
+        # La part conservée doit décroître régulièrement, pas s'effondrer
+        assert parts[0] > 0.9 and parts[-1] < 0.1
+        milieu = parts[len(parts) // 2]
+        assert 0.25 < milieu < 0.75, f"à mi-course il reste {milieu:.0%}"
+
+    def test_raw_thresholds_collapse_immediately(self, concentrated):
+        """Le comportement d'origine, conservé pour comparaison."""
+        parts = [m.mean() for m in mask_sequence(concentrated, 12, even=False)]
+        assert parts[2] < 0.05, "l'original vidait l'image en deux images"
+
+    def test_a_flat_map_still_dissolves(self):
+        """Sans relief, les quantiles se confondraient et rien ne bougerait.
+
+        Une image unie doit quand même laisser la place à la suivante : on
+        se rabat sur un balayage spatial.
+        """
+        flat = np.full((64, 64), 30, np.uint8)
+        parts = [m.mean() for m in mask_sequence(flat, 10, even=True)]
+        assert parts[0] == 1.0, "tout est là au départ"
+        assert parts[-1] == 0.0, "la seconde image doit finir par tout occuper"
+        assert 0.2 < parts[5] < 0.9, f"la transition doit être progressive ({parts[5]:.0%})"
+
+    def test_the_last_mask_is_always_empty(self, concentrated):
+        """Sans quoi la seconde image n'arriverait jamais tout à fait."""
+        for frames in (4, 12, 30):
+            assert mask_sequence(concentrated, frames)[-1].max() == 0
+
+    def test_masks_only_shrink(self, concentrated):
+        parts = [m.mean() for m in mask_sequence(concentrated, 16, even=True)]
+        assert all(b <= a + 1e-6 for a, b in zip(parts, parts[1:]))
+
+
+class TestSortedRegionIsVisible:
+    """Trier ce qu'on n'affiche pas ne se voit pas."""
+
+    @pytest.fixture
+    def pair(self):
+        def disc(colour):
+            image = np.zeros((240, 240, 3), np.uint8)
+            cv2.circle(image, (120, 120), 80, colour, -1)
+            return image
+        return [disc((40, 70, 210)), disc((210, 90, 50))]
+
+    def test_visible_sorting_changes_more_than_the_original(self, pair):
+        from atelier.video import render_frame
+        recipe = Recipe(sources=("a", "b"), seed=31)
+        index = 14
+
+        ancien = render_frame(recipe, Motion(frames_per_transition=24,
+                                             sort_visible=False), 240, index, pair)
+        nouveau = render_frame(recipe, Motion(frames_per_transition=24,
+                                              sort_visible=True), 240, index, pair)
+        assert not np.array_equal(ancien, nouveau), \
+            "trier la zone visible doit changer l'image"

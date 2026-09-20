@@ -69,6 +69,9 @@
     font-variant-numeric: tabular-nums;
   }
 
+  #dossier, #cible { margin-bottom: 10px; }
+  .vignette.reglee { border-left: 3px solid var(--accent); }
+
   .modes { display: flex; gap: 4px; margin-bottom: 18px; }
   .mode {
     flex: 1; padding: 7px; font-size: 12px;
@@ -140,6 +143,7 @@
 
 <aside>
   <h1>Atelier</h1>
+  <select id="dossier" title="Changer de série"></select>
   <div class="racine" id="racine">…</div>
   <h2>Images</h2>
   <div id="sources"></div>
@@ -161,7 +165,9 @@
   </div>
 
   <h2>Matières</h2>
+  <select id="cible" title="À quelle image appliquer ces matières"></select>
   <div id="effets"></div>
+  <div class="note" id="note-cible"></div>
 
   <h2>Saillance</h2>
   <div class="effet">
@@ -233,11 +239,27 @@ const EFFETS = [
   { cle:'halftone', nom:'Trame',         min:0.003, max:0.04,  pas:0.001, defaut:0.010, unite:'grain' },
 ];
 
+function reglagesNeufs() {
+  return Object.fromEntries(EFFETS.map(e => [e.cle, { actif:false, force:e.defaut }]));
+}
+
 const etat = {
   mode: 'image', totalFrames: 0,
   disponibles: [], choisies: [],
-  effets: Object.fromEntries(EFFETS.map(e => [e.cle, { actif:false, force:e.defaut }])),
+  effets: reglagesNeufs(),   // réglage commun
+  propres: {},               // réglages propres, par chemin d'image
+  cible: '',                 // '' = le réglage commun
 };
+
+// Les curseurs éditent soit le réglage commun, soit celui d'une image
+function reglagesCourants() {
+  if (!etat.cible) return etat.effets;
+  if (!etat.propres[etat.cible]) {
+    // On part du réglage commun : régler une image ne repart pas de zéro
+    etat.propres[etat.cible] = JSON.parse(JSON.stringify(etat.effets));
+  }
+  return etat.propres[etat.cible];
+}
 
 const $ = s => document.querySelector(s);
 let minuterie = null, enCours = false, aRefaire = false;
@@ -257,12 +279,12 @@ function batirEffets() {
   EFFETS.forEach(e => {
     const bascule = $(`#on-${e.cle}`), curseur = $(`#f-${e.cle}`);
     bascule.onchange = () => {
-      etat.effets[e.cle].actif = bascule.checked;
+      reglagesCourants()[e.cle].actif = bascule.checked;
       curseur.disabled = !bascule.checked;
-      afficherValeur(e); demanderRendu();
+      afficherValeur(e); peindreChoix(); demanderRendu();
     };
     curseur.oninput = () => {
-      etat.effets[e.cle].force = parseFloat(curseur.value);
+      reglagesCourants()[e.cle].force = parseFloat(curseur.value);
       afficherValeur(e); demanderRendu();
     };
     afficherValeur(e);
@@ -270,7 +292,7 @@ function batirEffets() {
 }
 
 function afficherValeur(e) {
-  const { actif, force } = etat.effets[e.cle];
+  const { actif, force } = reglagesCourants()[e.cle];
   const champ = $(`#v-${e.cle}`);
   if (!actif) { champ.textContent = ''; return; }
   // Un grain exprimé en fraction se lit mal : on le montre en pixels sur le format visé
@@ -280,14 +302,35 @@ function afficherValeur(e) {
 }
 
 // --- sources ----------------------------------------------------------------
+async function changerDossier(chemin) {
+  const d = await (await fetch('/api/folder', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path: chemin }),
+  })).json();
+  if (d.error) { $('#etat').textContent = d.error; return; }
+  // On change de série : la sélection et les réglages propres ne suivent pas
+  etat.choisies = []; etat.propres = {}; etat.cible = '';
+  poserSources(d);
+  rendre();
+}
+
 async function chargerSources() {
-  const r = await fetch('/api/sources');
-  const d = await r.json();
+  poserSources(await (await fetch('/api/sources')).json());
+}
+
+function poserSources(d) {
   $('#racine').textContent = d.root;
   etat.disponibles = d.images;
 
+  const voisins = d.neighbours || [];
+  $('#dossier').innerHTML =
+    `<option value="${d.root}">${d.root.split('/').pop()} (${d.images.length})</option>` +
+    voisins.map(v => `<option value="${v.path}">${v.name} (${v.count})</option>`).join('');
+  $('#dossier').value = d.root;
+
   if (!d.images.length) {
     $('#sources').innerHTML = '<div class="note">Aucune image dans ce dossier.</div>';
+    peindreCible();
     return;
   }
   $('#sources').innerHTML = d.images.map(i => `
@@ -310,8 +353,37 @@ function peindreChoix() {
   document.querySelectorAll('.vignette').forEach(el => {
     const rang = etat.choisies.indexOf(el.dataset.chemin);
     el.classList.toggle('choisie', rang !== -1);
+    el.classList.toggle('reglee', !!etat.propres[el.dataset.chemin]);
     el.querySelector('.ordre').textContent = rang === -1 ? '' : rang + 1;
   });
+  peindreCible();
+}
+
+function peindreCible() {
+  const choix = $('#cible');
+  if (etat.cible && !etat.choisies.includes(etat.cible)) etat.cible = '';
+  choix.innerHTML = '<option value="">Toutes les images</option>' +
+    etat.choisies.map((chemin, i) => {
+      const nom = chemin.split('/').pop();
+      const propre = etat.propres[chemin] ? ' •' : '';
+      return `<option value="${chemin}">${i + 1}. ${nom}${propre}</option>`;
+    }).join('');
+  choix.value = etat.cible;
+  peindreEffets();
+}
+
+// Recharge les curseurs depuis la cible choisie
+function peindreEffets() {
+  const reglages = reglagesCourants();
+  EFFETS.forEach(e => {
+    $(`#on-${e.cle}`).checked = reglages[e.cle].actif;
+    $(`#f-${e.cle}`).value = reglages[e.cle].force;
+    $(`#f-${e.cle}`).disabled = !reglages[e.cle].actif;
+    afficherValeur(e);
+  });
+  $('#note-cible').textContent = etat.cible
+    ? "Ces matières ne s'appliquent qu'à cette image."
+    : "Ces matières s'appliquent aux images sans réglage propre.";
 }
 
 // --- tirages déjà faits ------------------------------------------------------
@@ -343,25 +415,36 @@ function appliquer(r) {
   $('#debordement').checked = r.overflow;
   ['seuil', 'lissage', 'bords'].forEach(id => { $('#v-' + id).textContent = $('#' + id).value; });
 
-  const actifs = Object.fromEntries(r.effects.map(e => [e.name, e.strength]));
-  EFFETS.forEach(e => {
-    const force = actifs[e.cle];
-    etat.effets[e.cle] = { actif: force !== undefined, force: force ?? e.defaut };
-    $(`#on-${e.cle}`).checked = etat.effets[e.cle].actif;
-    $(`#f-${e.cle}`).value = etat.effets[e.cle].force;
-    $(`#f-${e.cle}`).disabled = !etat.effets[e.cle].actif;
-    afficherValeur(e);
+  const versReglages = liste => {
+    const actifs = Object.fromEntries((liste || []).map(e => [e.name, e.strength]));
+    return Object.fromEntries(EFFETS.map(e => [e.cle, {
+      actif: actifs[e.cle] !== undefined,
+      force: actifs[e.cle] ?? e.defaut,
+    }]));
+  };
+  etat.effets = versReglages(r.effects);
+  etat.propres = {};
+  (r.per_image || []).forEach((groupe, i) => {
+    if (groupe !== null && r.sources[i]) etat.propres[r.sources[i]] = versReglages(groupe);
   });
+  etat.cible = '';
+  peindreChoix();
   rendre();
 }
 
 // --- rendu ------------------------------------------------------------------
+function enListe(reglages) {
+  return EFFETS.filter(e => reglages[e.cle].actif)
+               .map(e => ({ name: e.cle, strength: reglages[e.cle].force }));
+}
+
 function corps(extra = {}) {
   return {
     sources: etat.choisies,
     seed: $('#graine').value ? parseInt($('#graine').value) : null,
-    effects: EFFETS.filter(e => etat.effets[e.cle].actif)
-                   .map(e => ({ name: e.cle, strength: etat.effets[e.cle].force })),
+    effects: enListe(etat.effets),
+    per_image: etat.choisies.map(
+      chemin => etat.propres[chemin] ? enListe(etat.propres[chemin]) : null),
     threshold: parseInt($('#seuil').value),
     smoothness: parseFloat($('#lissage').value),
     edge_blur: parseInt($('#bords').value),
@@ -518,6 +601,8 @@ $('#graine').onchange = demanderRendu;
 $('#relancer').onclick = () => { $('#graine').value = ''; rendre(); };
 $('#taille').onchange = () => EFFETS.forEach(afficherValeur);
 $('#exporter').onclick = exporter;
+$('#dossier').onchange = () => changerDossier($('#dossier').value);
+$('#cible').onchange = () => { etat.cible = $('#cible').value; peindreEffets(); };
 $('#tirer-video').onclick = tirerVideo;
 document.querySelectorAll('.mode').forEach(b => b.onclick = () => basculer(b.dataset.mode));
 $('#frames').oninput = () => {

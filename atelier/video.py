@@ -54,6 +54,13 @@ class Motion:
     # Le tirage de méthodes de l'original, qui laisse le rouge intact.
     # Voir sort_channels_separately(). À décocher pour trier les trois canaux.
     channel_quirk: bool = True
+    # Trier l'image là où elle est visible, et non là où elle disparaît.
+    # L'original faisait l'inverse et son tri restait invisible ; voir
+    # transition(). Mettre False pour retrouver son comportement exact.
+    sort_visible: bool = True
+    # Répartir la dissolution sur les quantiles de la saillance plutôt que sur
+    # ses valeurs brutes. Voir mask_sequence(). False retrouve l'original.
+    even_dissolve: bool = True
 
 
 def sort_key(image: np.ndarray, method: str) -> np.ndarray:
@@ -209,30 +216,60 @@ def shift_channels(image: np.ndarray, shift: int, rng: random.Random) -> np.ndar
     return cv2.merge([blue, green, red])
 
 
-def mask_sequence(saliency: np.ndarray, frames: int) -> list[np.ndarray]:
-    """Seuils croissants sur la saillance : l'image se retire par degrés."""
+def mask_sequence(saliency: np.ndarray, frames: int,
+                  even: bool = True) -> list[np.ndarray]:
+    """Seuils croissants sur la saillance : l'image se retire par degrés.
+
+    Le résidu spectral produit une carte très concentrée — sur les
+    photographies du projet, la médiane est à 0,02 et la moyenne à 0,04.
+    Répartir les seuils de 0 à 1 comme le faisait l'original vidait donc
+    l'image en deux images : 100 % conservé, puis 16 %, puis 6 %, et plus
+    rien ne bougeait pendant les vingt suivantes. C'est pourquoi aucune
+    décomposition n'était visible.
+
+    Les seuils suivent maintenant les quantiles de la carte : chaque image
+    retire une part comparable, et la dissolution occupe toute la séquence.
+    `even=False` retrouve le comportement d'origine.
+    """
     field = saliency.astype(np.float32)
     if field.max() > 1.0:
         field = field / 255.0
     field = cv2.GaussianBlur(field, (15, 15), 0)
-    # Exposant 0.8 : on s'attarde sur les valeurs intermédiaires, là où se
+
+    # Une carte sans relief — image unie, scan de papier blanc — rendrait
+    # tous les quantiles égaux, et l'image ne se dissoudrait jamais : la
+    # seconde n'arriverait pas. On se rabat alors sur un balayage spatial,
+    # qui donne au moins une transition.
+    if float(field.max() - field.min()) < 1e-3:
+        width = field.shape[1]
+        field = np.tile(np.linspace(1.0, 0.0, width, dtype=np.float32), (field.shape[0], 1))
+        even = False
+
+    # Exposant 0.8 : on s'attarde sur le milieu de la dissolution, là où se
     # joue la décomposition.
-    thresholds = np.power(np.linspace(0.0, 1.0, max(frames, 2)), 0.8)
+    steps = np.power(np.linspace(0.0, 1.0, max(frames, 2)), 0.8)
+    thresholds = np.quantile(field, steps) if even else steps
+    # Le dernier masque doit être vide, pour que la seconde image arrive
+    # entièrement quelle que soit la distribution.
+    thresholds = np.asarray(thresholds, dtype=np.float64)
+    thresholds[-1] = float(field.max()) + 1e-6
     return [(field >= t).astype(np.float32) for t in thresholds]
 
 
-def transition_masks(first, second, frames):
+def transition_masks(first, second, frames, even: bool = True):
     """Les deux séquences de masques d'une transition.
 
     La première image se retire par seuils croissants ; la seconde reste
     absente le premier tiers puis se révèle de la même manière.
     """
     blur = (31, 31)
-    masks_first = mask_sequence(cv2.GaussianBlur(saliency_of(first), blur, 0), frames)
+    masks_first = mask_sequence(
+        cv2.GaussianBlur(saliency_of(first), blur, 0), frames, even
+    )
     late = max(2 * frames // 3, 1)
     masks_second = [np.zeros(second.shape[:2], np.float32)] * (frames - late)
     masks_second += mask_sequence(
-        cv2.GaussianBlur(saliency_of(second), blur, 0), late
+        cv2.GaussianBlur(saliency_of(second), blur, 0), late, even
     )
     return masks_first, masks_second[:frames], late
 
@@ -262,7 +299,9 @@ def transition(
     """Engendre les frames d'une transition entre deux images de même taille."""
     frames = max(2, motion.frames_per_transition)
     side = max(first.shape[:2])
-    masks_first, masks_second, late = transition_masks(first, second, frames)
+    masks_first, masks_second, late = transition_masks(
+        first, second, frames, motion.even_dissolve
+    )
 
     for index in range(frames):
         yield _one_frame(first, second, masks_first[index], masks_second[index],
@@ -284,26 +323,36 @@ def _one_frame(first, second, keep, reveal, index, frames, late, side,
         vertical = index < frames / 2
         method = rng.choice(SORT_METHODS)
 
+        # L'original triait l'image 1 sur `keep < 0.5`, puis la composait
+        # avec le poids `keep` : les deux zones étant complémentaires, le tri
+        # tombait exactement là où l'image n'est pas affichée et ne se voyait
+        # jamais. Son propre commentaire annonçait pourtant une image « qui
+        # reste visible et se dégrade ». On trie donc ce qu'on montre.
+        zone_first = keep > 0.5 if motion.sort_visible else keep < 0.5
         if motion.enhanced:
             undone = sort_channels_separately(
-                first, keep < 0.5, vertical, side, rng, flips, motion.channel_quirk
+                first, zone_first, vertical, side, rng, flips, motion.channel_quirk
             )
         else:
             undone = pixel_sort(
-                first, keep < 0.5, method, vertical, minimum, maximum, flips
+                first, zone_first, method, vertical, minimum, maximum, flips
             )
         shift = int(motion.channel_shift * side * progress)
         undone = shift_channels(undone, shift, rng)
 
         if index >= frames - late:
+            # L'image 2 n'est montrée que là où l'image 1 s'est retirée :
+            # c'est cette part-là qu'il faut travailler.
+            zone_second = (reveal > 0.5) & (keep < 0.5) if motion.sort_visible \
+                else reveal > 0.5
             if motion.enhanced:
                 revealed = sort_channels_separately(
-                    second, reveal > 0.5, not vertical, side, rng, flips,
+                    second, zone_second, not vertical, side, rng, flips,
                     motion.channel_quirk,
                 )
             else:
                 revealed = pixel_sort(
-                    second, reveal > 0.5, method, not vertical,
+                    second, zone_second, method, not vertical,
                     max(2, minimum // 2), max(3, maximum // 2), flips,
                 )
         else:
@@ -369,7 +418,9 @@ def render_frame(recipe: Recipe, motion: Motion, size: int, index: int,
     pair, local = divmod(index, per_pair)
 
     first, second = framed[pair], framed[pair + 1]
-    masks_first, masks_second, late = transition_masks(first, second, per_pair)
+    masks_first, masks_second, late = transition_masks(
+        first, second, per_pair, motion.even_dissolve
+    )
     return _one_frame(
         first, second, masks_first[local], masks_second[local],
         local, per_pair, late, max(first.shape[:2]), motion, recipe.seed, pair,

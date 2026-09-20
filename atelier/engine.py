@@ -64,7 +64,12 @@ class Recipe:
 
     sources: tuple[str, ...]
     seed: int
+    # Matières appliquées à toutes les images qui n'ont pas de réglage propre
     effects: tuple[Effect, ...] = ()
+    # Une entrée par image, dans l'ordre des sources : None pour suivre le
+    # réglage commun, un tuple — même vide — pour le remplacer. Permet de
+    # tramer une image, d'en pixelliser une autre, et d'en laisser une nette.
+    per_image: tuple[tuple[Effect, ...] | None, ...] = ()
     saliency_threshold: int = 120
     smoothness: float = 3.0
     edge_blur: int = 0
@@ -74,6 +79,13 @@ class Recipe:
 
     def with_seed(self, seed: int) -> Recipe:
         return replace(self, seed=int(seed))
+
+
+def effects_for(recipe: Recipe, index: int) -> tuple[Effect, ...]:
+    """Les matières d'une image : les siennes, sinon celles de la recette."""
+    if index < len(recipe.per_image) and recipe.per_image[index] is not None:
+        return recipe.per_image[index]
+    return recipe.effects
 
 
 def new_seed() -> int:
@@ -219,6 +231,7 @@ def apply_effects(
     saliency: np.ndarray,
     recipe: Recipe,
     canvas: int,
+    effects: tuple[Effect, ...] | None = None,
 ) -> np.ndarray:
     """Applique la suite d'effets de la recette.
 
@@ -230,7 +243,7 @@ def apply_effects(
     quiet = saliency < recipe.saliency_threshold
     result = image
 
-    for effect in recipe.effects:
+    for effect in (recipe.effects if effects is None else effects):
         if effect.name == "pixelate":
             result = apply_pixelate(result, quiet, effect.pixels(canvas))
         elif effect.name == "bitmap":
@@ -288,7 +301,7 @@ def render(recipe: Recipe, size: int = PREVIEW_SIZE, sources=None) -> np.ndarray
     weights = np.zeros((size, size), dtype=np.float32)
     span = max(1, int(round(SOURCE_SPAN * size)))
 
-    for image, placement in zip(images, placements_for(recipe)):
+    for index, (image, placement) in enumerate(zip(images, placements_for(recipe))):
         height, width = image.shape[:2]
         scale = span / max(height, width)
         target = (max(1, int(round(width * scale))), max(1, int(round(height * scale))))
@@ -304,7 +317,9 @@ def render(recipe: Recipe, size: int = PREVIEW_SIZE, sources=None) -> np.ndarray
         x = int(round(placement.fx * max(0, size - target[0])))
         y = int(round(placement.fy * max(0, size - target[1])))
 
-        treated = apply_effects(resized, saliency, recipe, size)
+        treated = apply_effects(
+            resized, saliency, recipe, size, effects_for(recipe, index)
+        )
         weight = saliency.astype(np.float32) / 255.0
 
         canvas[y:y + target[1], x:x + target[0]] += treated * weight[:, :, None]

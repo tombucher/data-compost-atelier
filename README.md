@@ -54,6 +54,15 @@ dans `sorties/`, avec sa recette à l'intérieur.
 Un tirage déjà fait réapparaît sous **Reprendre** : un clic restaure ses
 images, sa graine et tous ses réglages. C'est le seul usage de la graine.
 
+Le menu en haut à gauche change de série sans relancer l'atelier : il propose
+le dossier parent et les dossiers voisins qui contiennent des images.
+
+Au-dessus des matières, un second menu choisit **à quelle image** elles
+s'appliquent. Par défaut « Toutes les images » ; en choisissant une image
+précise, les curseurs ne règlent plus qu'elle — on peut tramer l'une,
+pixelliser l'autre, et laisser la troisième intacte. Les images ayant leur
+propre réglage sont marquées d'un trait dans la liste.
+
 ## Les matières
 
 Les effets mordent sur les zones **peu** saillantes, sauf la saturation qui
@@ -110,6 +119,34 @@ sort à 4000 ou 8000 px.
 
 **Tirer la séquence** écrit un mp4. Le calcul dure des minutes en grand
 format, il tourne en tâche de fond et l'avancement s'affiche.
+
+### Pourquoi l'original ne montrait pas de datamoshing
+
+Deux raisons, trouvées en cherchant l'effet manquant.
+
+**Le tri tombait dans la zone cachée.** L'image 1 était triée là où son masque
+valait 0, puis composée avec le poids de ce même masque : les deux zones étant
+complémentaires, le tri portait exactement sur ce qui n'était pas affiché. Le
+commentaire de `datamoshing4.py` annonçait pourtant « img1 reste visible et se
+dégrade ». L'intention et le code se contredisaient.
+
+**La dissolution se jouait en deux images.** Le résidu spectral produit une
+carte très concentrée — sur les photographies du projet, médiane 0,02 et
+moyenne 0,04. Des seuils répartis de 0 à 1 donnaient donc :
+
+```
+part conservée : 100  16  6  3  2  1  1  0  0  0 ... 0
+```
+
+Tout basculait entre la première et la troisième image, et les vingt suivantes
+étaient figées. Les seuils suivent maintenant les quantiles de la carte :
+
+```
+part conservée : 100 100 87 87 75 75 67 61 54 49 ... 0
+```
+
+Les deux comportements d'origine restent accessibles par `Motion.sort_visible`
+et `Motion.even_dissolve`.
 
 ### Le canal rouge n'est jamais trié
 
