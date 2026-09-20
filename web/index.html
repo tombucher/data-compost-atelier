@@ -4,336 +4,527 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Atelier</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
+  /* Les couleurs du compost, pas celles d'un studio. Le fond reste sombre —
+     on juge des images dessus — mais brun de terre plutôt que gris neutre.
+     Les deux accents portent chacun un sens : le vert dit ce qui est vivant
+     et en cours, l'ocre dit la matière qu'on a posée. */
   :root {
-    --fond: #121210;
-    --panneau: #1b1b18;
-    --bord: #2e2e29;
-    --texte: #e8e6df;
-    --discret: #8e8a7e;
-    --accent: #c9a227;
-    --vif: #e4e0d4;
+    --terre: #161310;
+    --humus: #1E1914;
+    --litiere: #272019;
+    --radicelle: #3A3026;
+    --mycelium: #EAE4D6;
+    --spore: #958A76;
+    --ferment: #C2D83A;
+    --braise: #D0803C;
+    --police: 'IBM Plex Sans', ui-sans-serif, system-ui, -apple-system, sans-serif;
   }
+
   * { box-sizing: border-box; }
+  html, body { height: 100%; }
   body {
     margin: 0;
-    background: var(--fond);
-    color: var(--texte);
-    font: 14px/1.5 ui-sans-serif, system-ui, -apple-system, sans-serif;
-    height: 100vh;
-    display: grid;
-    grid-template-columns: 250px 1fr 290px;
+    background: var(--terre);
+    color: var(--mycelium);
+    font: 400 13px/1.5 var(--police);
+    font-variant-numeric: tabular-nums;
+    display: flex; flex-direction: column;
+    overflow: hidden;
   }
-  @media (max-width: 1000px) {
-    body { grid-template-columns: 1fr; height: auto; }
+
+  /* --- barre du haut : ce qui vaut pour toute la séance --- */
+  .bandeau {
+    display: flex; align-items: center; gap: 12px;
+    padding: 0 14px; height: 48px; flex: 0 0 auto;
+    background: var(--humus);
+    border-bottom: 1px solid var(--radicelle);
+  }
+  .marque { font-weight: 600; font-size: 15px; letter-spacing: -0.01em; }
+  .marque span { color: var(--braise); }
+  .bandeau .grandit { flex: 1; }
+
+  /* --- la scène : la pile | l'aperçu | les matières --- */
+  .scene {
+    flex: 1; min-height: 0;
+    display: grid;
+    grid-template-columns: 238px minmax(0, 1fr) 304px;
   }
 
   aside {
-    background: var(--panneau);
-    border-right: 1px solid var(--bord);
-    overflow-y: auto;
-    padding: 18px 16px;
+    background: var(--humus);
+    overflow-y: auto; overflow-x: hidden;
+    padding: 14px;
+    display: flex; flex-direction: column; gap: 20px;
   }
-  aside:last-of-type { border-right: 0; border-left: 1px solid var(--bord); }
+  .scene > aside:first-child { border-right: 1px solid var(--radicelle); }
+  .scene > aside:last-child { border-left: 1px solid var(--radicelle); }
 
-  h1 {
-    font-size: 13px; letter-spacing: .16em; text-transform: uppercase;
-    color: var(--accent); margin: 0 0 4px;
-  }
-  .racine { color: var(--discret); font-size: 11px; word-break: break-all; margin-bottom: 18px; }
   h2 {
-    font-size: 11px; letter-spacing: .14em; text-transform: uppercase;
-    color: var(--discret); margin: 22px 0 10px; font-weight: 600;
+    font-size: 12px; font-weight: 600; margin: 0 0 6px;
+    display: flex; align-items: baseline; gap: 6px;
   }
-  h2:first-of-type { margin-top: 0; }
+  h2 em { font-style: normal; font-weight: 400; color: var(--spore); font-size: 11px; }
+  .note { font-size: 11.5px; color: var(--spore); line-height: 1.45; margin: 0 0 6px; }
 
-  /* --- sources --- */
-  .vignette {
-    display: flex; align-items: center; gap: 10px;
-    padding: 5px; margin-bottom: 4px; border-radius: 4px;
-    cursor: pointer; border: 1px solid transparent;
+  /* --- la pile : une coupe, pas une liste ---
+     La dernière image posée est en haut, parce que c'est elle que le temps
+     défait la première. Le trait vert sur son flanc montre où elle en est. */
+  .pile { display: flex; flex-direction: column; gap: 2px; }
+  .strate {
+    display: grid; grid-template-columns: 5px 34px 1fr auto;
+    align-items: center; gap: 8px;
+    background: var(--litiere); border: 1px solid var(--radicelle);
+    padding: 5px 6px 5px 0; position: relative; border-radius: 2px;
   }
-  .vignette:hover { background: #24241f; }
-  .vignette.choisie { border-color: var(--accent); background: #26241c; }
-  .vignette img {
-    width: 42px; height: 42px; object-fit: cover;
-    border-radius: 3px; background: #000; flex-shrink: 0;
+  .strate .jauge {
+    align-self: stretch; background: #332A20; position: relative; overflow: hidden;
   }
-  .vignette span {
-    font-size: 11px; color: var(--discret);
+  .strate .jauge i {
+    position: absolute; inset: auto 0 0 0; background: var(--ferment);
+    transition: height .18s ease;
+  }
+  .strate img {
+    width: 34px; height: 34px; object-fit: cover; display: block;
+    border-radius: 2px; cursor: pointer;
+  }
+  .strate .nom { overflow: hidden; }
+  .strate .nom b {
+    display: block; font-weight: 500; font-size: 11.5px;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
-  .vignette.choisie span { color: var(--texte); }
-  .ordre {
-    margin-left: auto; font-size: 10px; color: var(--accent);
-    font-variant-numeric: tabular-nums;
+  .strate .nom i { font-style: normal; color: var(--spore); font-size: 10.5px; }
+  .strate.propre .nom i { color: var(--braise); }
+  .strate.visee { outline: 1px solid var(--braise); outline-offset: -1px; }
+  .strate .mains { display: flex; gap: 1px; }
+  .strate .mains button {
+    width: 20px; height: 20px; padding: 0; font-size: 10px; line-height: 1;
+    background: transparent; border-color: transparent; color: var(--spore);
+  }
+  .strate .mains button:hover { background: var(--radicelle); color: var(--mycelium); }
+
+  /* --- la réserve : les images du dossier --- */
+  .reserve { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+  .galet {
+    position: relative; aspect-ratio: 1; cursor: pointer; padding: 0;
+    border: 1px solid transparent; border-radius: 2px; overflow: hidden;
+    background: var(--litiere);
+  }
+  .galet img { width: 100%; height: 100%; object-fit: cover; display: block; opacity: .6; }
+  .galet:hover img { opacity: .9; }
+  .galet.prise { border-color: var(--braise); }
+  .galet.prise img { opacity: 1; }
+  .galet .rang {
+    position: absolute; right: 2px; bottom: 2px;
+    background: var(--braise); color: #1A1508;
+    font-size: 9.5px; font-weight: 600; line-height: 1;
+    padding: 2px 4px; border-radius: 2px;
   }
 
-  #dossier, #cible { margin-bottom: 10px; }
-  .vignette.reglee { border-left: 3px solid var(--accent); }
-
-  .modes { display: flex; gap: 4px; margin-bottom: 18px; }
-  .mode {
-    flex: 1; padding: 7px; font-size: 12px;
-    background: #1f1f1b; border: 1px solid var(--bord);
-  }
-  .mode.actif { background: var(--accent); color: #17170f; border-color: var(--accent); font-weight: 600; }
-
-  .tirage {
-    padding: 6px 8px; margin-bottom: 4px; border-radius: 4px;
-    border: 1px solid var(--bord); cursor: pointer; font-size: 11px;
-  }
-  .tirage:hover { background: #24241f; border-color: #47473d; }
-  .tirage b { color: var(--accent); font-weight: 600; font-variant-numeric: tabular-nums; }
-  .tirage em { color: var(--discret); font-style: normal; display: block; }
-  .tirage.incomplet { opacity: .5; cursor: not-allowed; }
-
-  /* --- aperçu --- */
+  /* --- l'aperçu et l'axe --- */
   main {
-    display: flex; flex-direction: column;
-    align-items: center; justify-content: center;
-    padding: 24px; gap: 14px; min-height: 60vh;
+    display: flex; flex-direction: column; align-items: center;
+    justify-content: center; gap: 16px; padding: 18px; min-height: 0;
   }
   #apercu {
-    max-width: 100%; max-height: calc(100vh - 110px);
-    background: #000; border: 1px solid var(--bord);
-    image-rendering: auto;
+    max-width: 100%; max-height: calc(100vh - 215px);
+    background: #000; display: block; box-shadow: 0 0 0 1px var(--radicelle);
   }
-  #apercu.attente { opacity: .45; transition: opacity .2s; }
-  .etat {
-    font-size: 11px; color: var(--discret);
-    font-variant-numeric: tabular-nums; min-height: 16px;
-  }
-  .vide { color: var(--discret); text-align: center; max-width: 320px; }
+  /* `display: block` l'emporterait sur l'attribut hidden, et l'image
+     cassée resterait visible tant qu'aucune composition n'est rendue. */
+  [hidden] { display: none !important; }
+  #apercu.attente { opacity: .5; }
+  .vide { color: var(--spore); text-align: center; max-width: 34ch; line-height: 1.6; }
+  .vide strong { color: var(--mycelium); font-weight: 500; display: block; margin-bottom: 4px; }
 
-  /* L'axe du temps : la décomposition se parcourt, elle ne se règle pas
-     dans un panneau latéral. */
-  .axe { width: 100%; max-width: 640px; }
-  .axe input[type=range] { width: 100%; }
-  .axe-legende {
-    display: flex; justify-content: space-between;
-    font-size: 11px; color: var(--discret); margin-top: 2px;
-    font-variant-numeric: tabular-nums;
+  /* L'axe est la pièce centrale du dispositif : il en a la place.
+     Le dégradé va du plein au vide, dans le sens de la décomposition. */
+  .axe { width: min(660px, 100%); }
+  .axe .rail { position: relative; height: 26px; }
+  .axe .fond {
+    position: absolute; inset: 7px 0; border-radius: 2px;
+    background: linear-gradient(90deg, var(--braise) 0%, #6E5A34 45%, #332A20 100%);
+    opacity: .55;
   }
-
-  /* --- réglages --- */
-  .effet { margin-bottom: 14px; }
-  .ligne { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
-  .ligne label { flex: 1; cursor: pointer; user-select: none; }
-  .ligne .valeur {
-    color: var(--discret); font-size: 11px; font-variant-numeric: tabular-nums;
+  .axe input[type=range] {
+    position: absolute; inset: 0; width: 100%; margin: 0;
+    background: transparent; -webkit-appearance: none; appearance: none;
   }
-  input[type=range] { width: 100%; accent-color: var(--accent); cursor: pointer; }
-  input[type=range]:disabled { opacity: .3; cursor: default; }
-  input[type=checkbox] { accent-color: var(--accent); cursor: pointer; }
+  .axe input[type=range]::-webkit-slider-runnable-track { height: 26px; background: transparent; }
+  .axe input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 9px; height: 26px; border-radius: 2px; cursor: ew-resize;
+    background: var(--ferment); border: none; box-shadow: 0 0 0 1px var(--terre);
+  }
+  .axe input[type=range]::-moz-range-thumb {
+    width: 9px; height: 26px; border-radius: 2px; cursor: ew-resize;
+    background: var(--ferment); border: none;
+  }
+  .axe .legende {
+    display: flex; justify-content: space-between; margin-top: 3px;
+    font-size: 11px; color: var(--spore);
+  }
+  .axe .legende b { color: var(--ferment); font-weight: 500; }
+  .etat { font-size: 11px; color: var(--spore); min-height: 15px; text-align: center; }
 
-  .graine { display: flex; gap: 6px; align-items: center; }
+  /* --- les matières : on voit avant de choisir ---
+     Ce qui est posé monte en haut et s'ouvre sur toute la largeur ; ce qui
+     reste disponible attend en dessous, en vignettes. Une matière active au
+     milieu de la grille y ouvrait un trou. */
+  .posees { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
+  .matieres { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+
+  .posees .bloc {
+    border: 1px solid var(--braise); border-radius: 2px; overflow: hidden;
+  }
+  .posees .matiere {
+    flex-direction: row; align-items: stretch; width: 100%;
+    border: 0; border-radius: 0;
+  }
+  .posees .matiere .apercu { width: 52px; aspect-ratio: auto; flex: 0 0 52px; }
+  .posees .matiere .titre { flex: 1; }
+  .posees .detail { padding: 8px 8px 10px; border-bottom: 0; background: var(--litiere); }
+
+  .matieres .bloc { display: contents; }
+
+  .matiere {
+    border: 1px solid var(--radicelle); background: var(--litiere);
+    padding: 0; cursor: pointer; overflow: hidden; text-align: left;
+    display: flex; flex-direction: column; color: var(--mycelium);
+    border-radius: 2px;
+  }
+  .matiere:hover { border-color: #57493A; }
+  .matiere .apercu { aspect-ratio: 1; background: #0E0C0A center/cover no-repeat; }
+  .matiere .titre {
+    display: flex; align-items: center; gap: 4px;
+    padding: 4px 5px; font-size: 11px; line-height: 1.25;
+  }
+  .matiere .titre b { font-weight: 500; flex: 1; }
+  .matiere .titre s { text-decoration: none; color: var(--spore); font-size: 10px; }
+  .matiere.active { border-color: var(--braise); }
+  .matiere.active .titre { background: var(--braise); color: #1A1508; }
+  .matiere.active .titre s { color: #58430F; }
+  .matiere.active .aide { border-color: #8A5620; color: #58430F; }
+
+  /* Les réglages d'une matière n'apparaissent que si elle est posée. */
+  .detail { padding: 4px 2px 9px; }
+  .formes { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 7px; }
+  .forme {
+    width: 30px; height: 30px; padding: 0; border-radius: 2px;
+    background: #F0EADC center/cover no-repeat;
+    border: 1px solid var(--radicelle); cursor: pointer;
+  }
+  .forme.active { border-color: var(--ferment); box-shadow: 0 0 0 1px var(--ferment); }
+
+  /* --- réglages génériques --- */
+  .reglage { margin-bottom: 11px; }
+  .ligne { display: flex; align-items: center; gap: 7px; margin-bottom: 3px; }
+  .ligne label { flex: 1; cursor: pointer; user-select: none; font-size: 12px; }
+  .ligne .valeur { color: var(--spore); font-size: 11px; }
+  .sous { margin: 8px 0 0 10px; padding-left: 8px; border-left: 1px solid var(--radicelle); }
+  .sous label { font-size: 11px; color: var(--spore); }
+
+  input[type=range] { width: 100%; accent-color: var(--ferment); cursor: pointer; }
+  input[type=checkbox] { accent-color: var(--braise); cursor: pointer; }
   input[type=number], input[type=text], select {
-    background: #101010; color: var(--texte);
-    border: 1px solid var(--bord); border-radius: 4px;
-    padding: 6px 8px; font: inherit; font-size: 12px; width: 100%;
+    background: var(--terre); color: var(--mycelium);
+    border: 1px solid var(--radicelle); border-radius: 3px;
+    padding: 5px 7px; font: inherit; font-size: 12px; width: 100%;
     font-variant-numeric: tabular-nums;
   }
+  .bandeau select { width: auto; max-width: 250px; }
+
   button {
-    background: #262620; color: var(--vif);
-    border: 1px solid var(--bord); border-radius: 4px;
-    padding: 8px 10px; font: inherit; font-size: 12px; cursor: pointer;
+    background: var(--litiere); color: var(--mycelium);
+    border: 1px solid var(--radicelle); border-radius: 3px;
+    padding: 6px 10px; font: inherit; font-size: 12px; cursor: pointer;
     white-space: nowrap;
   }
-  button:hover { background: #31312a; border-color: #47473d; }
-  button.principal { background: var(--accent); color: #17170f; border-color: var(--accent); font-weight: 600; }
-  button.principal:hover { background: #dcb433; }
+  button:hover:not(:disabled) { background: #302719; border-color: #57493A; }
+  button.pousse {
+    background: var(--ferment); color: #1B1F04;
+    border-color: var(--ferment); font-weight: 600;
+  }
+  button.pousse:hover:not(:disabled) { background: #D3E84B; }
   button:disabled { opacity: .4; cursor: default; }
-  .rangee { display: flex; gap: 6px; }
-  .note { font-size: 11px; color: var(--discret); margin-top: 8px; line-height: 1.45; }
-  /* Une note de section suit son titre et s'en détache nettement, pour qu'on
-     ne la prenne pas pour le commentaire du réglage précédent. */
-  .note.bloc { margin: -8px 0 14px; padding-left: 8px; border-left: 2px solid var(--bord); }
-  .note.bloc.alerte { border-left-color: var(--accent); color: #c5b98c; }
+  :focus-visible { outline: 2px solid var(--ferment); outline-offset: 1px; }
 
-  /* L'axe d'une matière se range sous elle, en retrait : c'est un réglage
-     de second rang, pas une matière de plus. */
-  .sous-reglage { margin: 6px 0 0 12px; border-left: 1px solid var(--bord); padding-left: 8px; }
-  .sous-reglage label { font-size: 11px; color: var(--discret); }
+  .duo { display: flex; gap: 1px; }
+  .duo button { border-radius: 0; }
+  .duo button:first-child { border-radius: 3px 0 0 3px; }
+  .duo button:last-child { border-radius: 0 3px 3px 0; }
+  .duo button.tenu { background: var(--braise); color: #1A1508; border-color: var(--braise); }
+  .rangee { display: flex; gap: 5px; }
 
-  /* Infobulle : le panneau défile, donc la bulle est posée en position fixe
-     par le script plutôt qu'en absolu, qui serait rogné. */
-  /* Le point d'interrogation est un bouton, en bout de ligne, et la bulle
-     s'ouvre au clic : au survol elle s'ouvrait dès qu'on traversait le
-     panneau pour atteindre un curseur. */
+  .resultat { font-size: 11px; color: var(--spore); line-height: 1.45; word-break: break-all; }
+  .resultat.abouti { color: var(--ferment); }
+
+  .tirage {
+    padding: 5px 7px; border: 1px solid var(--radicelle); border-radius: 2px;
+    cursor: pointer; font-size: 11px; margin-bottom: 3px; background: var(--litiere);
+  }
+  .tirage:hover { border-color: #57493A; }
+  .tirage b { color: var(--braise); font-weight: 500; }
+  .tirage em { color: var(--spore); font-style: normal; display: block; }
+  .tirage.incomplet { opacity: .45; cursor: not-allowed; }
+
+  /* L'aide s'ouvre au clic, jamais au survol : on traverse le panneau pour
+     atteindre un curseur, on ne veut pas déclencher des bulles en chemin. */
   .aide {
-    flex: 0 0 auto; width: 16px; height: 16px; padding: 0; margin-left: 2px;
-    border-radius: 50%; font-size: 10px; line-height: 1;
-    background: transparent; border: 1px solid var(--bord); color: var(--discret);
+    flex: 0 0 auto; width: 15px; height: 15px; padding: 0;
+    border-radius: 50%; font-size: 9px; line-height: 1;
+    background: transparent; border: 1px solid var(--radicelle); color: var(--spore);
   }
-  .aide:hover { background: #2c2c25; color: var(--texte); }
-  .aide.ouverte { background: var(--accent); border-color: var(--accent); color: #17170f; }
+  .aide:hover { background: var(--radicelle); color: var(--mycelium); }
+  .aide.ouverte { background: var(--ferment); border-color: var(--ferment); color: #1B1F04; }
   #bulle {
-    position: fixed; z-index: 50; max-width: 270px; display: none;
-    background: #0c0c0a; color: var(--texte); border: 1px solid #45453c;
-    border-radius: 5px; padding: 8px 10px; font-size: 11.5px; line-height: 1.5;
-    box-shadow: 0 6px 20px rgba(0, 0, 0, .55);
+    position: fixed; z-index: 60; max-width: 272px; display: none;
+    background: #0D0B09; color: var(--mycelium); border: 1px solid #4A3E30;
+    border-radius: 4px; padding: 9px 11px; font-size: 11.5px; line-height: 1.5;
+    box-shadow: 0 8px 26px rgba(0,0,0,.6);
   }
-  .note.reussite { color: var(--accent); word-break: break-all; }
+
+  /* En dessous de trois colonnes, les panneaux s'empilent et la page défile
+     d'un bloc. Garder les hauteurs du mode large ferait chevaucher l'aperçu
+     et les panneaux, et étirerait chaque strate sur toute la largeur. */
+  @media (max-width: 1100px) {
+    body { overflow: auto; height: auto; }
+    .scene { display: block; }
+    aside, main { overflow: visible; min-height: 0; }
+    .scene > aside { border: 0; border-top: 1px solid var(--radicelle); }
+    .pile { display: grid; grid-template-columns: repeat(auto-fill, minmax(238px, 1fr)); gap: 4px; }
+    .reserve { grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); }
+    .matieres { grid-template-columns: repeat(auto-fill, minmax(146px, 1fr)); }
+    .posees .bloc { max-width: 540px; }
+    main { padding: 22px 14px; }
+    #apercu { max-height: 66vh; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; animation: none !important; }
+  }
 </style>
 </head>
 <body>
 
-<aside>
-  <h1>Atelier</h1>
-  <h2>Dossier des images</h2>
-  <select id="dossier" title="Où l'atelier prend ses images"></select>
-  <div class="racine" id="racine">…</div>
-  <h2>Images</h2>
-  <div id="sources"></div>
-
-  <h2>Reprendre</h2>
-  <div id="tirages"><div class="note">Aucun tirage pour l'instant.</div></div>
-</aside>
-
 <div id="bulle"></div>
 
-<main>
-  <img id="apercu" alt="aperçu" hidden>
-  <div class="vide" id="vide">Choisissez au moins une image à gauche.</div>
-  <div class="axe" id="axe" hidden>
-    <input type="range" id="temps" min="0" max="47" step="1" value="0">
-    <div class="axe-legende">
-      <span>intact</span>
-      <span id="v-temps">1 / 48</span>
-      <span>composté</span>
+<header class="bandeau">
+  <div class="marque">Atelier<span>.</span></div>
+  <select id="dossier" title="Où l'atelier prend ses images"></select>
+  <div class="grandit"></div>
+  <div class="duo" id="cadrage">
+    <button data-cadre="pose" class="tenu">Dans le cadre</button>
+    <button data-cadre="plein">Plein cadre</button>
+  </div>
+  <select id="famille" title="Dans quelle veine tirer">
+    <option value="">toutes veines</option>
+    <option value="halftone">trame</option>
+    <option value="bitmap">bitmap</option>
+    <option value="pixelate">pixellisation</option>
+    <option value="saturate">saturation</option>
+  </select>
+  <button class="pousse" id="hasard">Au hasard</button>
+</header>
+
+<div class="scene">
+
+  <aside>
+    <section>
+      <h2>La pile <em id="compte-pile"></em></h2>
+      <p class="note" id="note-pile">Prenez des images ci-dessous. La dernière posée se décompose la première.</p>
+      <div class="pile" id="pile"></div>
+    </section>
+
+    <section>
+      <h2>Le dossier <em id="compte-reserve"></em></h2>
+      <div class="reserve" id="reserve"></div>
+      <p class="note" id="racine" style="margin-top:6px"></p>
+    </section>
+
+    <section>
+      <h2>Reprendre</h2>
+      <div id="tirages"></div>
+    </section>
+  </aside>
+
+  <main>
+    <img id="apercu" alt="Aperçu de la composition" hidden>
+    <div class="vide" id="vide">
+      <strong>Rien sur l'établi.</strong>
+      Prenez deux ou trois images dans le dossier, ou laissez le hasard choisir.
     </div>
-  </div>
-  <div class="etat" id="etat"></div>
-</main>
-
-<aside>
-  <div class="rangee" style="margin-bottom:6px">
-    <button class="principal" id="hasard" style="flex:1">Au hasard</button>
-    <select id="famille" style="width:auto" title="Dans quelle veine tirer">
-      <option value="">toutes veines</option>
-      <option value="halftone">trame</option>
-      <option value="bitmap">bitmap</option>
-      <option value="pixelate">pixellisation</option>
-      <option value="saturate">saturation</option>
-    </select>
-  </div>
-  <div class="note" id="note-hasard">Tire images et réglages d'après les 230 œuvres conservées. Tout reste modifiable ensuite.</div>
-
-  <h2>Cadrage</h2>
-  <div class="modes">
-    <button class="mode actif" data-cadre="pose">Dans le cadre</button>
-    <button class="mode" data-cadre="plein">Plein cadre</button>
-  </div>
-
-  <h2>Matières</h2>
-  <div class="note bloc" id="note-cible"></div>
-  <select id="cible" title="À quelle image appliquer ces matières"></select>
-  <div id="effets"></div>
-
-  <h2>Saillance</h2>
-  <div class="note bloc">Où les matières mordent. Elles attaquent les zones
-  les plus calmes — le sujet, lui, reste net.</div>
-  <div class="effet">
-    <div class="ligne"><label for="seuil">Part dégradée</label><span class="valeur" id="v-seuil"></span></div>
-    <input type="range" id="seuil" min="0" max="100" step="1" value="60">
-  </div>
-  <div class="effet">
-    <div class="ligne"><label for="lissage">Lissage</label><span class="valeur" id="v-lissage"></span></div>
-    <input type="range" id="lissage" min="0" max="12" step="0.5" value="3">
-  </div>
-  <div class="effet">
-    <div class="ligne"><label for="bords">Contours seuls</label><span class="valeur" id="v-bords"></span></div>
-    <input type="range" id="bords" min="0" max="15" step="1" value="0">
-  </div>
-  <div class="effet">
-    <div class="ligne"><label for="bavure">Bavure</label><span class="valeur" id="v-bavure"></span></div>
-    <input type="range" id="bavure" min="0" max="1" step="0.05" value="0">
-  </div>
-
-  <h2>Le temps</h2>
-  <div class="note bloc" id="note-temps"></div>
-  <div class="effet">
-    <div class="ligne"><label for="frames">Durée</label><span class="valeur" id="v-frames"></span></div>
-    <input type="range" id="frames" min="8" max="240" step="4" value="48">
-  </div>
-  <div class="effet">
-    <div class="ligne"><label for="stagger">Décalage entre couches</label><span class="valeur" id="v-stagger"></span></div>
-    <input type="range" id="stagger" min="0" max="1" step="0.05" value="0.45">
-  </div>
-  <div class="effet">
-    <div class="ligne"><label for="residue">Ce qui résiste</label><span class="valeur" id="v-residue"></span></div>
-    <input type="range" id="residue" min="0" max="0.6" step="0.02" value="0.12">
-  </div>
-  <div class="effet">
-    <div class="ligne"><label for="ripening">Mûrissement</label><span class="valeur" id="v-ripening"></span></div>
-    <input type="range" id="ripening" min="0" max="4" step="0.1" value="1">
-  </div>
-  <div class="effet">
-    <div class="ligne"><label for="tearing">Déchirure</label><span class="valeur" id="v-tearing"></span></div>
-    <input type="range" id="tearing" min="0" max="1" step="0.05" value="1">
-  </div>
-  <div class="effet">
-    <div class="ligne"><label for="min_segment">Déchirure la plus courte</label><span class="valeur" id="v-min_segment"></span></div>
-    <input type="range" id="min_segment" min="0.004" max="0.2" step="0.002" value="0.03">
-  </div>
-  <div class="effet">
-    <div class="ligne"><label for="max_segment">Déchirure la plus longue</label><span class="valeur" id="v-max_segment"></span></div>
-    <input type="range" id="max_segment" min="0.01" max="0.5" step="0.005" value="0.10">
-  </div>
-  <div class="effet">
-    <div class="ligne"><label for="segment_growth">Allongement</label><span class="valeur" id="v-segment_growth"></span></div>
-    <input type="range" id="segment_growth" min="0" max="5" step="0.1" value="1.5">
-  </div>
-  <div class="effet">
-    <div class="ligne"><label for="channel_shift">Décalage RVB</label><span class="valeur" id="v-channel_shift"></span></div>
-    <input type="range" id="channel_shift" min="0" max="0.1" step="0.002" value="0.015">
-  </div>
-
-  <h2>Tirage</h2>
-  <div class="effet">
-    <div class="ligne"><label for="graine">Graine</label></div>
-    <div class="graine">
-      <input type="number" id="graine" placeholder="au hasard">
-      <button id="relancer" title="Nouveau tirage">↻</button>
+    <div class="axe" id="axe" hidden>
+      <div class="rail">
+        <div class="fond"></div>
+        <input type="range" id="temps" min="0" max="47" step="1" value="0"
+               aria-label="Avancement de la décomposition">
+      </div>
+      <div class="legende">
+        <span>intact</span><b id="v-temps">1 / 48</b><span>composté</span>
+      </div>
     </div>
-    <div class="note">Le hasard décide de la composition. La graine sert seulement à retrouver un tirage pour l'agrandir.</div>
-  </div>
-  <div class="effet">
-    <div class="ligne"><label for="taille">Format</label><span class="valeur" id="v-taille"></span></div>
-    <select id="taille">
-      <option value="2000">2000 px</option>
-      <option value="4000" selected>4000 px</option>
-      <option value="6000">6000 px</option>
-      <option value="8000">8000 px</option>
-    </select>
-  </div>
-  <div class="rangee">
-    <button class="principal" id="exporter" style="flex:1">Tirer cet instant</button>
-    <select id="format" style="width:auto"><option value="jpg">JPEG</option><option value="png">PNG</option></select>
-  </div>
-  <div class="rangee" style="margin-top:6px">
-    <button id="tirer-video" style="flex:1">Tirer tout l'axe en vidéo</button>
-  </div>
-  <div class="note">Une image prélève l'instant où vous êtes sur l'axe. Une vidéo parcourt tout l'axe, de l'intact au composté.</div>
-  <div class="note" id="resultat"></div>
+    <div class="etat" id="etat"></div>
+  </main>
 
-  <h2>Fidélité</h2>
-  <div class="note bloc">Ce qu'on garde des accidents de l'original. Décocher
-  une case corrige le comportement ; le laisser coché reproduit 2024.</div>
-  <div class="ligne"><input type="checkbox" id="debordement" checked>
-    <label for="debordement">Débordement de saturation</label></div>
-  <div class="ligne"><input type="checkbox" id="enhanced" checked>
-    <label for="enhanced">Trier les canaux séparément</label></div>
-  <div class="ligne"><input type="checkbox" id="channel_quirk" checked>
-    <label for="channel_quirk">Laisser le rouge intact</label></div>
-  <div class="ligne"><input type="checkbox" id="sort_visible" checked>
-    <label for="sort_visible">Trier ce qu'on voit</label></div>
-  <div class="ligne"><input type="checkbox" id="even_dissolve" checked>
-    <label for="even_dissolve">Dissolution régulière</label></div>
-</aside>
+  <aside>
+    <section>
+      <h2>Matières <em id="note-cible"></em></h2>
+      <select id="cible" title="À quelle couche appliquer ces matières"></select>
+      <div class="posees" id="posees" style="margin-top:6px"></div>
+      <div class="matieres" id="matieres"></div>
+    </section>
+
+    <section>
+      <h2>Où ça mord</h2>
+      <div class="reglage">
+        <div class="ligne"><label for="seuil">Part dégradée</label><span class="valeur" id="v-seuil"></span></div>
+        <input type="range" id="seuil" min="0" max="100" step="1" value="60">
+      </div>
+      <div class="reglage">
+        <div class="ligne"><label for="bavure">Bavure</label><span class="valeur" id="v-bavure"></span></div>
+        <input type="range" id="bavure" min="0" max="1" step="0.05" value="0">
+      </div>
+      <div class="reglage">
+        <div class="ligne"><label for="lissage">Lissage</label><span class="valeur" id="v-lissage"></span></div>
+        <input type="range" id="lissage" min="0" max="12" step="0.5" value="3">
+      </div>
+      <div class="reglage">
+        <div class="ligne"><label for="bords">Contours seuls</label><span class="valeur" id="v-bords"></span></div>
+        <input type="range" id="bords" min="0" max="15" step="1" value="0">
+      </div>
+    </section>
+
+    <section>
+      <h2>Le temps</h2>
+      <p class="note" id="note-temps"></p>
+      <div class="reglage">
+        <div class="ligne"><label for="frames">Durée</label><span class="valeur" id="v-frames"></span></div>
+        <input type="range" id="frames" min="8" max="240" step="4" value="48">
+      </div>
+      <div class="reglage">
+        <div class="ligne"><label for="ripening">Mûrissement</label><span class="valeur" id="v-ripening"></span></div>
+        <input type="range" id="ripening" min="0" max="4" step="0.1" value="1">
+      </div>
+      <div class="reglage">
+        <div class="ligne"><label for="tearing">Déchirure</label><span class="valeur" id="v-tearing"></span></div>
+        <input type="range" id="tearing" min="0" max="1" step="0.05" value="1">
+      </div>
+      <div class="reglage">
+        <div class="ligne"><label for="stagger">Décalage entre couches</label><span class="valeur" id="v-stagger"></span></div>
+        <input type="range" id="stagger" min="0" max="1" step="0.05" value="0.45">
+      </div>
+      <div class="reglage">
+        <div class="ligne"><label for="residue">Ce qui résiste</label><span class="valeur" id="v-residue"></span></div>
+        <input type="range" id="residue" min="0" max="0.6" step="0.02" value="0.12">
+      </div>
+      <div class="reglage">
+        <div class="ligne"><label for="min_segment">Déchirure la plus courte</label><span class="valeur" id="v-min_segment"></span></div>
+        <input type="range" id="min_segment" min="0.004" max="0.2" step="0.002" value="0.03">
+      </div>
+      <div class="reglage">
+        <div class="ligne"><label for="max_segment">Déchirure la plus longue</label><span class="valeur" id="v-max_segment"></span></div>
+        <input type="range" id="max_segment" min="0.01" max="0.5" step="0.005" value="0.10">
+      </div>
+      <div class="reglage">
+        <div class="ligne"><label for="segment_growth">Allongement</label><span class="valeur" id="v-segment_growth"></span></div>
+        <input type="range" id="segment_growth" min="0" max="5" step="0.1" value="1.5">
+      </div>
+      <div class="reglage">
+        <div class="ligne"><label for="channel_shift">Décalage RVB</label><span class="valeur" id="v-channel_shift"></span></div>
+        <input type="range" id="channel_shift" min="0" max="0.1" step="0.002" value="0.015">
+      </div>
+    </section>
+
+    <section>
+      <h2>Tirer</h2>
+      <div class="reglage">
+        <div class="ligne"><label for="graine">Graine</label></div>
+        <div class="rangee">
+          <input type="number" id="graine" placeholder="au hasard">
+          <button id="relancer" title="Nouveau tirage">↻</button>
+        </div>
+      </div>
+      <div class="reglage">
+        <div class="ligne"><label for="taille">Format</label></div>
+        <select id="taille">
+          <option value="2000">2000 px — 17 cm</option>
+          <option value="4000" selected>4000 px — 34 cm</option>
+          <option value="6000">6000 px — 51 cm</option>
+          <option value="8000">8000 px — 68 cm</option>
+        </select>
+      </div>
+      <div class="rangee">
+        <button class="pousse" id="exporter" style="flex:1">Tirer cet instant</button>
+        <select id="format" style="width:auto"><option value="jpg">JPEG</option><option value="png">PNG</option></select>
+      </div>
+      <div class="rangee" style="margin-top:5px">
+        <button id="tirer-video" style="flex:1">Tirer tout l'axe en vidéo</button>
+      </div>
+      <p class="resultat" id="resultat"></p>
+    </section>
+
+    <section>
+      <h2>Fidélité</h2>
+      <p class="note">Des comportements de rendu inhabituels, qu'on peut vouloir ou non.</p>
+      <div class="ligne"><input type="checkbox" id="debordement" checked>
+        <label for="debordement">Débordement de saturation</label></div>
+      <div class="ligne"><input type="checkbox" id="enhanced" checked>
+        <label for="enhanced">Trier les canaux séparément</label></div>
+      <div class="ligne"><input type="checkbox" id="channel_quirk" checked>
+        <label for="channel_quirk">Laisser le rouge intact</label></div>
+      <div class="ligne"><input type="checkbox" id="sort_visible" checked>
+        <label for="sort_visible">Trier ce qu'on voit</label></div>
+      <div class="ligne"><input type="checkbox" id="even_dissolve" checked>
+        <label for="even_dissolve">Dissolution régulière</label></div>
+    </section>
+  </aside>
+</div>
 
 <script>
+const $ = s => document.querySelector(s);
+
+// Ce que chaque réglage fait à l'image, en une phrase. Le panneau en est
+// plein : une phrase posée sous un curseur se lit comme le commentaire du
+// suivant, donc elles passent toutes en bulle, ouvertes au clic.
+const AIDES = {
+  pixelate: "Remplace des blocs carrés par leur couleur moyenne. Le détail s'en va, la couleur reste.",
+  bitmap: "Bascule en noir et blanc purs, sans aucun gris. Le curseur mélange ce noir et blanc avec l'image ; à fond, il ne reste que deux valeurs.",
+  saturate: "Pousse les couleurs. C'est la seule matière qui s'attaque au sujet et non au fond : ce qui attire l'œil devient criard pendant que le reste se défait.",
+  halftone: "Remplace les gris par des points plus ou moins gros, comme une image de journal. Le curseur règle la cellule, les pastilles la forme du point.",
+  pixelsort: "Réordonne les pixels par bandes, du sombre au clair. L'image coule en traînées.",
+  mosh: "Trie chaque canal de couleur séparément, chacun avec sa longueur et son sens. Les couleurs se décollent les unes des autres.",
+  shift: "Déplace le rouge et le bleu en sens opposés. L'image se dédouble en franges colorées.",
+  'x-mosh': "Envoie le vert perpendiculairement au rouge et au bleu, ce qui croise les coulées. Décoché, les trois canaux coulent dans le même sens.",
+
+  seuil: "Quelle part de l'image les matières attaquent, en partant des zones les plus calmes. À 100 %, tout y passe, sujet compris.",
+  bavure: "De combien les matières débordent de la zone calme. À zéro elles s'y tiennent — or cette zone ne porte que 14 % du poids de la composition, et un tri s'y noie. En montant, elles gagnent le sujet et se voient enfin.",
+  lissage: "Adoucit la carte de saillance avant de s'en servir. Au minimum, les zones dégradées ont des bords hachés ; en montant, elles se fondent.",
+  bords: "Ne garde que le pourtour des zones saillantes, au lieu de leur intérieur. L'image se réduit à un liseré autour de son sujet.",
+
+  frames: "Le nombre d'images entre l'intact et le composté. Ne change pas la composition, seulement la finesse du parcours — et la durée de la vidéo.",
+  ripening: "De combien les matières que vous avez posées s'intensifient au bout de l'axe. La trame grossit, les blocs s'élargissent, le bitmap durcit. C'est ce qui fait que le compostage dépend de ce qu'on a choisi.",
+  tearing: "La part que prend la déchirure — le tri canal par canal et le décalage RVB — dans la décomposition. À zéro, le temps ne fait plus que mûrir ce qu'on a posé, et évider.",
+  stagger: "À zéro, toutes les images pourrissent en même temps. Au maximum, elles s'effacent l'une après l'autre. Celle posée en dernier part toujours la première.",
+  residue: "La part la plus dense de chaque image, encore là à la fin. Un compost finit sur de l'humus ; à zéro, la séquence s'éteint au noir.",
+  min_segment: "La plus courte des bandes que le tri réordonne. Des bandes courtes donnent un grain nerveux, des bandes longues des coulées.",
+  max_segment: "La plus longue des bandes que le tri réordonne. C'est elle qui décide jusqu'où la matière peut s'étirer.",
+  segment_growth: "De combien les bandes s'allongent à mesure que l'image se défait. À zéro, la déchirure garde la même échelle du début à la fin.",
+  channel_shift: "De combien le rouge et le bleu s'écartent quand la matière pourrit. Nul au premier instant, maximal à la fin.",
+
+  debordement: "La saturation est multipliée dans un tableau d'entiers 8 bits : au-delà de 255, les valeurs repassent par le bas — 150 × 2 donne 44 — et les couleurs cassent.",
+  enhanced: "Trie chaque canal à part, ce qui sépare les couleurs. Décoché, les trois canaux se trient ensemble et l'image reste grise.",
+  channel_quirk: "Chaque canal est répliqué en gris avant d'être trié. Comme le rouge ne tire qu'entre deux méthodes sans effet sur un gris, il n'est jamais trié : c'est ce qui donne sa dominante à l'effet.",
+  sort_visible: "Le tri porte sur la zone encore visible. Décoché, il porte sur celle qui disparaît — il ne se voit alors presque pas.",
+  even_dissolve: "Les seuils suivent les quantiles de la saillance, pour que la dissolution occupe tout l'axe. Décoché, l'image se vide en deux ou trois images.",
+
+  graine: "Le nombre d'où sort toute la composition. Il ne sert qu'à revenir sur un tirage pour l'agrandir — il n'oblige à rien répéter.",
+  taille: "La taille du tirage. L'aperçu reste petit pour rester vif ; c'est ici que se décide la définition du fichier écrit.",
+};
+
 // Les matières qui travaillent par lignes acceptent un axe, et chacune a le
 // sien : une trame à 45° sur un tri à l'horizontale est une combinaison
 // qu'un angle commun interdirait.
@@ -342,10 +533,10 @@ const EFFETS_ANGLE = ['halftone', 'pixelsort', 'mosh', 'shift'];
 // `enPixels` marque les forces exprimées en fraction de toile : elles se
 // lisent mieux converties au format visé.
 const EFFETS = [
-  { cle:'pixelate', nom:'Pixellisation', min:0.002, max:0.05, pas:0.001, defaut:0.008, enPixels:true },
-  { cle:'bitmap',   nom:'Bitmap',        min:0,     max:1,    pas:0.01,  defaut:0.70,  unite:'mélange' },
-  { cle:'saturate', nom:'Saturation',    min:1,     max:4,    pas:0.05,  defaut:2.00,  unite:'×' },
   { cle:'halftone', nom:'Trame',         min:0.003, max:0.04, pas:0.001, defaut:0.010, enPixels:true },
+  { cle:'bitmap',   nom:'Bitmap',        min:0,     max:1,    pas:0.01,  defaut:0.70,  unite:'mélange' },
+  { cle:'pixelate', nom:'Pixellisation', min:0.002, max:0.05, pas:0.001, defaut:0.008, enPixels:true },
+  { cle:'saturate', nom:'Saturation',    min:1,     max:4,    pas:0.05,  defaut:2.00,  unite:'×' },
   { cle:'pixelsort',nom:'Tri de pixels', min:0.005, max:0.15, pas:0.005, defaut:0.040, enPixels:true },
   { cle:'mosh',     nom:'Datamoshing',   min:0.005, max:0.15, pas:0.005, defaut:0.030, enPixels:true },
   { cle:'shift',    nom:'Décalage RVB',  min:0.001, max:0.04, pas:0.001, defaut:0.008, enPixels:true },
@@ -358,113 +549,15 @@ const FORMES = [
   ['euclidean', 'euclidienne'],
 ];
 
-// Ce que chaque réglage fait à l'image. Le panneau en est plein, et une
-// phrase posée sous un curseur se lit comme le commentaire du suivant :
-// elles passent donc toutes en infobulle, attachées à leur libellé.
-const AIDES = {
-  // Matières
-  pixelate: "Remplace des blocs carrés par leur couleur moyenne. Le détail s'en va, la couleur reste. Plus le bloc est gros, plus l'image devient une mosaïque.",
-  bitmap: "Bascule en noir et blanc purs, sans aucun gris. Le curseur mélange ce noir et blanc avec l'image ; à fond, il ne reste que deux valeurs.",
-  saturate: "Pousse les couleurs. C'est la seule matière qui s'attaque au sujet et non au fond : ce qui attire l'œil devient criard pendant que le reste se défait.",
-  halftone: "Remplace les gris par des points plus ou moins gros, comme une image de journal. Le curseur règle la taille de la cellule, le menu la forme du point.",
-  pixelsort: "Réordonne les pixels par bandes, du sombre au clair. L'image coule en traînées, comme un fichier abîmé.",
-  'x-mosh': "Envoie le vert perpendiculairement au rouge et au bleu, ce qui croise les coulées. L'original le faisait, mais sa bizarrerie laissait souvent le vert seul canal trié : on ne voyait qu'une direction. Décoché, les trois canaux coulent dans le même sens.",
-  mosh: "Trie chaque canal de couleur séparément, chacun avec sa longueur et son sens. Les couleurs se décollent les unes des autres — c'est de là que vient la séparation colorée du datamoshing.",
-  shift: "Déplace le rouge et le bleu en sens opposés. L'image se dédouble en franges colorées.",
-  'forme-halftone': "La forme du point. La ronde est celle de l'original ; elle rend plus clair que les autres, parce que son point grossit moins vite. Sous cinq ou six pixels de cellule, les formes ne se distinguent plus.",
-
-  // Saillance
-  bavure: "De combien les matières débordent de la zone calme. À zéro elles s'y tiennent — or cette zone ne porte que 14 % du poids de la composition, et un tri s'y noie. En montant, elles gagnent le sujet et se voient enfin.",
-
-  seuil: "Quelle part de l'image les matières attaquent, en partant des zones les plus calmes. À 100 %, tout y passe, sujet compris. À 0, rien n'est touché.",
-  lissage: "Adoucit la carte de saillance avant de s'en servir. Au minimum, les zones dégradées ont des bords hachés ; en montant, elles se fondent dans le reste.",
-  bords: "Ne garde que le pourtour des zones saillantes, au lieu de leur intérieur. L'image se réduit à un liseré autour de son sujet — le centre disparaît de la composition.",
-
-  // Le temps
-  frames: "Le nombre d'images entre l'intact et le composté. Ne change pas la composition, seulement la finesse du parcours — et la durée de la vidéo.",
-  stagger: "À zéro, toutes les images pourrissent en même temps. Au maximum, elles s'effacent l'une après l'autre. Celle posée en dernier part toujours la première.",
-  ripening: "De combien les matières que vous avez posées s'intensifient au bout de l'axe. La trame grossit, les blocs s'élargissent, le bitmap durcit, les couleurs montent. C'est ce qui fait que le compostage dépend de ce qu'on a choisi, et non d'une dégradation venue par-dessus.",
-  tearing: "La part que prend la déchirure — le tri canal par canal et le décalage RVB — dans la décomposition. Elle est la même pour toutes les matières : c'est le geste du pourrissement lui-même. À zéro, le temps ne fait plus que mûrir ce qu'on a posé, et évider.",
-  residue: "La part la plus dense de chaque image, encore là à la fin. Un compost finit sur de l'humus ; à zéro, la séquence s'éteint au noir.",
-  min_segment: "La plus courte des bandes que le tri réordonne. Des bandes courtes donnent un grain nerveux, des bandes longues des coulées.",
-  max_segment: "La plus longue des bandes que le tri réordonne. C'est elle qui décide jusqu'où la matière peut s'étirer.",
-  segment_growth: "De combien les bandes s'allongent à mesure que l'image se défait. À zéro, la déchirure garde la même échelle du début à la fin.",
-  channel_shift: "De combien le rouge et le bleu s'écartent quand la matière pourrit. Croît avec le temps : nul à l'instant 0, maximal à la fin.",
-
-  // Fidélité
-  debordement: "Dans l'original, la saturation débordait au-delà de 255 et repassait par le bas : 150 × 2 donnait 44, et les couleurs cassaient. Seize œuvres de 2024 en vivent.",
-  enhanced: "Trie chaque canal à part, ce qui sépare les couleurs. Décoché, les trois canaux se trient ensemble et l'image reste grise.",
-  channel_quirk: "Un accident de l'original : le rouge n'était jamais réellement trié, ce qui donne sa dominante rouge au datamoshing. Décoché, les trois canaux sont traités pareil.",
-  sort_visible: "L'original triait la zone en train de disparaître, si bien que son tri ne se voyait jamais. Décoché, on retrouve exactement son rendu.",
-  even_dissolve: "Les seuils suivent les quantiles de la saillance, pour que la dissolution occupe tout l'axe. Décoché, l'image se vide en deux images comme à l'origine.",
-
-  // Tirage
-  graine: "Le nombre d'où sort toute la composition. Il ne sert qu'à revenir sur un tirage pour l'agrandir — il n'oblige à rien répéter.",
-  taille: "La taille du tirage. L'aperçu reste petit pour rester vif ; c'est ici que se décide la définition du fichier écrit.",
-  cadrage: "Dans le cadre : chaque image est posée entière dans la toile, et le fond noir reste visible autour — c'est la composition de 2024. Plein cadre : elle est agrandie jusqu'à couvrir la toile et déborde, comme sur une capture de vidéo.",
-};
-
-// Une seule bulle, posée en position fixe : le panneau défile, et une bulle
-// en absolu y serait rognée.
-let aideOuverte = null;
-
-function fermerAide() {
-  $('#bulle').style.display = 'none';
-  if (aideOuverte) aideOuverte.classList.remove('ouverte');
-  aideOuverte = null;
-}
-
-function brancherAides() {
-  const bulle = $('#bulle');
-  document.querySelectorAll('label[for]').forEach(lab => {
-    // Les cases des matières s'appellent « on-halftone » : on retombe sur la
-    // clé de la matière elle-même.
-    const cible = lab.getAttribute('for').replace(/^on-/, '');
-    const texte = AIDES[cible];
-    if (!texte || lab.parentElement.querySelector('.aide')) return;
-
-    const bouton = document.createElement('button');
-    bouton.className = 'aide';
-    bouton.type = 'button';
-    bouton.textContent = '?';
-    bouton.setAttribute('aria-label', 'À quoi sert ce réglage');
-    // En bout de ligne, après la valeur : la colonne des « ? » reste droite
-    lab.parentElement.appendChild(bouton);
-
-    bouton.onclick = evenement => {
-      evenement.stopPropagation();
-      if (aideOuverte === bouton) return fermerAide();
-      fermerAide();
-      aideOuverte = bouton;
-      bouton.classList.add('ouverte');
-      bulle.textContent = texte;
-      bulle.style.display = 'block';
-      const r = bouton.getBoundingClientRect();
-      const large = bulle.offsetWidth, haute = bulle.offsetHeight;
-      bulle.style.left = Math.max(8, r.left - large - 10) + 'px';
-      bulle.style.top = Math.min(window.innerHeight - haute - 8,
-                                 Math.max(8, r.top - 6)) + 'px';
-    };
-  });
-  const menu = $('#forme-halftone');
-  if (menu) menu.title = AIDES['forme-halftone'];
-}
-
-// Un clic ailleurs, ou Échap, referme la bulle
-document.addEventListener('click', fermerAide);
-document.addEventListener('keydown', e => { if (e.key === 'Escape') fermerAide(); });
-
+const AXE = ['frames', 'stagger', 'residue', 'ripening', 'tearing',
+             'min_segment', 'max_segment', 'segment_growth', 'channel_shift'];
+const BASCULES = ['enhanced', 'channel_quirk', 'sort_visible', 'even_dissolve'];
+const MORSURE = ['seuil', 'bavure', 'lissage', 'bords'];
 
 function reglagesNeufs() {
   return Object.fromEntries(EFFETS.map(
     e => [e.cle, { actif:false, force:e.defaut, forme:'round', angle:0, croise:false }]));
 }
-
-// Les réglages de l'axe, tels que le serveur les attend. Curseurs et cases
-// portent le même nom : la requête se construit sans table de correspondance.
-const AXE = ['frames', 'stagger', 'residue', 'ripening', 'tearing',
-             'min_segment', 'max_segment', 'segment_growth', 'channel_shift'];
-const BASCULES = ['enhanced', 'channel_quirk', 'sort_visible', 'even_dissolve'];
 
 const etat = {
   totalFrames: 48, pleinCadre: false,
@@ -472,89 +565,92 @@ const etat = {
   effets: reglagesNeufs(),   // réglage commun
   propres: {},               // réglages propres, par chemin d'image
   cible: '',                 // '' = le réglage commun
+  vignettes: {},             // ce que fait chaque matière, sur ces images-ci
+  vignettesPour: '',         // la sélection à laquelle elles correspondent
 };
 
-// Les curseurs éditent soit le réglage commun, soit celui d'une image
+// Les curseurs éditent soit le réglage commun, soit celui d'une couche
 function reglagesCourants() {
   if (!etat.cible) return etat.effets;
   if (!etat.propres[etat.cible]) {
-    // On part du réglage commun : régler une image ne repart pas de zéro
+    // On part du réglage commun : régler une couche ne repart pas de zéro
     etat.propres[etat.cible] = JSON.parse(JSON.stringify(etat.effets));
   }
   return etat.propres[etat.cible];
 }
 
-const $ = s => document.querySelector(s);
-let minuterie = null, enCours = false, aRefaire = false;
+// --- la pile ----------------------------------------------------------------
 
-// --- construction des réglages ---------------------------------------------
-function batirEffets() {
-  $('#effets').innerHTML = EFFETS.map(e => `
-    <div class="effet">
-      <div class="ligne">
-        <input type="checkbox" id="on-${e.cle}">
-        <label for="on-${e.cle}">${e.nom}</label>
-        <span class="valeur" id="v-${e.cle}"></span>
-      </div>
-      <input type="range" id="f-${e.cle}" min="${e.min}" max="${e.max}" step="${e.pas}" value="${e.defaut}" disabled>
-      ${e.cle === 'halftone' ? `<select id="forme-halftone" style="margin-top:6px" disabled>`
-        + FORMES.map(([cle, nom]) => `<option value="${cle}">trame ${nom}</option>`).join('')
-        + `</select>` : ''}
-      ${EFFETS_ANGLE.includes(e.cle) ? `
-      <div class="sous-reglage">
-        <div class="ligne"><label for="a-${e.cle}">axe</label><span class="valeur" id="va-${e.cle}"></span></div>
-        <input type="range" id="a-${e.cle}" min="0" max="175" step="5" value="0" disabled>
-        ${e.cle === 'mosh' ? `<div class="ligne" style="margin-top:6px">
-          <input type="checkbox" id="x-mosh" disabled>
-          <label for="x-mosh">croiser les canaux</label></div>` : ''}
-      </div>` : ''}
-    </div>`).join('');
-
-  EFFETS.forEach(e => {
-    const bascule = $(`#on-${e.cle}`), curseur = $(`#f-${e.cle}`);
-    const axe = $(`#a-${e.cle}`);
-    bascule.onchange = () => {
-      reglagesCourants()[e.cle].actif = bascule.checked;
-      curseur.disabled = !bascule.checked;
-      if (axe) axe.disabled = !bascule.checked;
-      const croix = $('#x-' + e.cle);
-      if (croix) croix.disabled = !bascule.checked;
-      afficherValeur(e); peindreChoix(); demanderRendu();
-      if (e.cle === 'halftone') $('#forme-halftone').disabled = !bascule.checked;
-    };
-    curseur.oninput = () => {
-      reglagesCourants()[e.cle].force = parseFloat(curseur.value);
-      afficherValeur(e); demanderRendu();
-    };
-    if (axe) axe.oninput = () => {
-      reglagesCourants()[e.cle].angle = parseFloat(axe.value);
-      $(`#va-${e.cle}`).textContent = axe.value + '°';
-      demanderRendu();
-    };
-    const croix = $('#x-' + e.cle);
-    if (croix) croix.onchange = () => {
-      reglagesCourants()[e.cle].croise = croix.checked;
-      demanderRendu();
-    };
-    afficherValeur(e);
-  });
-
-  $('#forme-halftone').onchange = () => {
-    reglagesCourants().halftone.forme = $('#forme-halftone').value;
-    demanderRendu();
-  };
+// L'avancement d'une couche, repris de `decay.layer_progress` pour que la
+// jauge dise la même chose que le rendu. La dernière posée part la première.
+function avancementCouche(moment, couche, total) {
+  const decalage = parseFloat($('#stagger').value);
+  if (total < 2 || decalage <= 0) return moment;
+  const rang = total - 1 - couche;
+  const depart = decalage * rang / total;
+  const etendue = Math.max(1e-6, 1 - decalage * (total - 1) / total);
+  return Math.min(1, Math.max(0, (moment - depart) / etendue));
 }
 
-function afficherValeur(e) {
-  const { actif, force } = reglagesCourants()[e.cle];
-  const champ = $(`#v-${e.cle}`);
-  const axe = $(`#va-${e.cle}`);
-  if (axe) axe.textContent = actif ? (reglagesCourants()[e.cle].angle || 0) + '°' : '';
-  if (!actif) { champ.textContent = ''; return; }
-  // Une fraction de toile se lit mal : on la montre en pixels sur le format visé
-  champ.textContent = e.enPixels
-    ? `${Math.max(2, Math.round(force * parseInt($('#taille').value)))} px`
-    : `${force.toFixed(2)} ${e.unite}`;
+function peindrePile() {
+  const pile = $('#pile');
+  const n = etat.choisies.length;
+  $('#compte-pile').textContent = n ? `${n} couche${n > 1 ? 's' : ''}` : '';
+  $('#note-pile').hidden = n > 0;
+  if (!n) { pile.innerHTML = ''; return; }
+
+  // De haut en bas : la dernière posée d'abord, puisqu'elle part la première
+  const ordre = etat.choisies.map((c, i) => ({ chemin: c, couche: i })).reverse();
+  pile.innerHTML = ordre.map(({ chemin, couche }) => {
+    const nom = chemin.split('/').pop();
+    const propre = !!etat.propres[chemin];
+    return `
+    <div class="strate ${propre ? 'propre' : ''} ${etat.cible === chemin ? 'visee' : ''}"
+         data-chemin="${chemin}">
+      <div class="jauge"><i style="height:0%"></i></div>
+      <img src="/api/thumbnail?path=${encodeURIComponent(chemin)}" alt=""
+           title="Régler cette couche à part">
+      <div class="nom"><b>${nom}</b><i>couche ${couche + 1}${propre ? ' · réglée à part' : ''}</i></div>
+      <div class="mains">
+        <button data-monte title="Poser plus haut">▲</button>
+        <button data-retire title="Retirer de la pile">✕</button>
+      </div>
+    </div>`;
+  }).join('');
+
+  pile.querySelectorAll('.strate').forEach(el => {
+    const chemin = el.dataset.chemin;
+    el.querySelector('[data-monte]').onclick = () => {
+      const i = etat.choisies.indexOf(chemin);
+      if (i < etat.choisies.length - 1) {
+        etat.choisies.splice(i, 1);
+        etat.choisies.splice(i + 1, 0, chemin);
+        peindreChoix(); demanderRendu();
+      }
+    };
+    el.querySelector('[data-retire]').onclick = () => {
+      etat.choisies = etat.choisies.filter(c => c !== chemin);
+      if (etat.cible === chemin) etat.cible = '';
+      peindreChoix(); demanderRendu();
+    };
+    el.querySelector('img').onclick = () => {
+      etat.cible = etat.cible === chemin ? '' : chemin;
+      peindreChoix();
+    };
+  });
+  peindreJauges();
+}
+
+// Où en est chaque couche à l'instant courant.
+function peindreJauges() {
+  const moment = etat.totalFrames > 1
+    ? parseInt($('#temps').value) / (etat.totalFrames - 1) : 0;
+  const total = etat.choisies.length;
+  document.querySelectorAll('.strate').forEach(el => {
+    const couche = etat.choisies.indexOf(el.dataset.chemin);
+    const part = avancementCouche(moment, couche, total);
+    el.querySelector('.jauge i').style.height = Math.round(part * 100) + '%';
+  });
 }
 
 // --- sources ----------------------------------------------------------------
@@ -577,6 +673,8 @@ async function chargerSources() {
 function poserSources(d) {
   $('#racine').textContent = d.root;
   etat.disponibles = d.images;
+  $('#compte-reserve').textContent =
+    `${d.images.length} image${d.images.length > 1 ? 's' : ''}`;
 
   // Le menu liste le dossier courant puis ceux d'à côté qui contiennent des
   // images. Le dossier des tirages en fait partie — on peut recomposter ses
@@ -595,17 +693,17 @@ function poserSources(d) {
   $('#dossier').value = d.root;
 
   if (!d.images.length) {
-    $('#sources').innerHTML = '<div class="note">Aucune image dans ce dossier.</div>';
-    peindreCible();
+    $('#reserve').innerHTML = '<p class="note">Aucune image ici.</p>';
+    peindreChoix();
     return;
   }
-  $('#sources').innerHTML = d.images.map(i => `
-    <div class="vignette" data-chemin="${i.path}">
-      <img loading="lazy" src="/api/thumbnail?path=${encodeURIComponent(i.path)}" alt="">
-      <span>${i.name}</span><span class="ordre"></span>
-    </div>`).join('');
+  $('#reserve').innerHTML = d.images.map(i => `
+    <button class="galet" data-chemin="${i.path}" title="${i.name}">
+      <img loading="lazy" src="/api/thumbnail?path=${encodeURIComponent(i.path)}" alt="${i.name}">
+      <span class="rang" hidden></span>
+    </button>`).join('');
 
-  document.querySelectorAll('.vignette').forEach(el => {
+  document.querySelectorAll('.galet').forEach(el => {
     el.onclick = () => {
       const chemin = el.dataset.chemin;
       const rang = etat.choisies.indexOf(chemin);
@@ -613,117 +711,145 @@ function poserSources(d) {
       peindreChoix(); demanderRendu();
     };
   });
+  peindreChoix();
 }
 
 function peindreChoix() {
-  document.querySelectorAll('.vignette').forEach(el => {
+  document.querySelectorAll('.galet').forEach(el => {
     const rang = etat.choisies.indexOf(el.dataset.chemin);
-    el.classList.toggle('choisie', rang !== -1);
-    el.classList.toggle('reglee', !!etat.propres[el.dataset.chemin]);
-    el.querySelector('.ordre').textContent = rang === -1 ? '' : rang + 1;
+    el.classList.toggle('prise', rang !== -1);
+    const marque = el.querySelector('.rang');
+    marque.hidden = rang === -1;
+    marque.textContent = rang === -1 ? '' : rang + 1;
   });
+  peindrePile();
   peindreCible();
+  chargerVignettes();
 }
 
 function peindreCible() {
   const choix = $('#cible');
-  if (etat.cible && !etat.choisies.includes(etat.cible)) etat.cible = '';
-  choix.innerHTML = '<option value="">Toutes les images</option>' +
-    etat.choisies.map((chemin, i) => {
-      const nom = chemin.split('/').pop();
-      const propre = etat.propres[chemin] ? ' •' : '';
-      return `<option value="${chemin}">${i + 1}. ${nom}${propre}</option>`;
-    }).join('');
-  choix.value = etat.cible;
+  const avant = etat.cible;
+  choix.innerHTML = '<option value="">Toute la pile</option>'
+    + etat.choisies.map((c, i) =>
+        `<option value="${c}">Couche ${i + 1} — ${c.split('/').pop()}</option>`).join('');
+  choix.value = etat.choisies.includes(avant) ? avant : '';
+  etat.cible = choix.value;
+  $('#note-cible').textContent = etat.cible ? 'sur cette couche' : 'sur toute la pile';
   peindreEffets();
 }
 
-// Recharge les curseurs depuis la cible choisie
+// --- les matières -----------------------------------------------------------
+
+// Une matière qu'on active à l'aveugle est une matière qu'on n'essaie pas :
+// chaque tuile montre ce que la matière fait, sur les images en cours.
+async function chargerVignettes() {
+  const signature = etat.choisies.join('|');
+  if (!etat.choisies.length || signature === etat.vignettesPour) return;
+  etat.vignettesPour = signature;
+  try {
+    const d = await (await fetch('/api/vignettes', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(corps()),
+    })).json();
+    if (d.vignettes) { etat.vignettes = d.vignettes; peindreEffets(); }
+  } catch (e) { /* une vignette manquante n'empêche pas de travailler */ }
+}
+
+function batirMatieres() {
+  $('#matieres').innerHTML = EFFETS.map(e => `
+    <div class="bloc" id="b-${e.cle}">
+    <button class="matiere" id="m-${e.cle}" data-cle="${e.cle}" aria-pressed="false">
+      <span class="apercu" id="ap-${e.cle}"></span>
+      <span class="titre"><b>${e.nom}</b><s id="v-${e.cle}"></s></span>
+    </button>
+    <div class="detail" id="d-${e.cle}" hidden>
+      <div class="ligne">
+        <label for="f-${e.cle}">force</label><span class="valeur" id="vf-${e.cle}"></span>
+      </div>
+      <input type="range" id="f-${e.cle}" min="${e.min}" max="${e.max}"
+             step="${e.pas}" value="${e.defaut}">
+      ${e.cle === 'halftone' ? `<div class="formes" id="formes"></div>` : ''}
+      ${EFFETS_ANGLE.includes(e.cle) ? `
+      <div class="sous">
+        <div class="ligne"><label for="a-${e.cle}">axe</label><span class="valeur" id="va-${e.cle}"></span></div>
+        <input type="range" id="a-${e.cle}" min="0" max="175" step="5" value="0">
+        ${e.cle === 'mosh' ? `<div class="ligne" style="margin-top:5px">
+          <input type="checkbox" id="x-mosh">
+          <label for="x-mosh">croiser les canaux</label></div>` : ''}
+      </div>` : ''}
+    </div>
+    </div>`).join('');
+
+  $('#formes').innerHTML = FORMES.map(([cle, nom]) =>
+    `<button class="forme" data-forme="${cle}" title="trame ${nom}" aria-label="trame ${nom}"
+             style="background-image:url(/api/motif?shape=${cle})"></button>`).join('');
+
+  EFFETS.forEach(e => {
+    $(`#m-${e.cle}`).onclick = () => {
+      const r = reglagesCourants()[e.cle];
+      r.actif = !r.actif;
+      peindreEffets(); demanderRendu();
+    };
+    $(`#f-${e.cle}`).oninput = () => {
+      reglagesCourants()[e.cle].force = parseFloat($(`#f-${e.cle}`).value);
+      afficherValeur(e); demanderRendu();
+    };
+    const axe = $(`#a-${e.cle}`);
+    if (axe) axe.oninput = () => {
+      reglagesCourants()[e.cle].angle = parseFloat(axe.value);
+      $(`#va-${e.cle}`).textContent = axe.value + '°';
+      demanderRendu();
+    };
+  });
+
+  $('#x-mosh').onchange = () => {
+    reglagesCourants().mosh.croise = $('#x-mosh').checked;
+    demanderRendu();
+  };
+  document.querySelectorAll('.forme').forEach(b => {
+    b.onclick = () => {
+      reglagesCourants().halftone.forme = b.dataset.forme;
+      peindreEffets(); demanderRendu();
+    };
+  });
+}
+
 function peindreEffets() {
   const reglages = reglagesCourants();
   EFFETS.forEach(e => {
-    $(`#on-${e.cle}`).checked = reglages[e.cle].actif;
-    $(`#f-${e.cle}`).value = reglages[e.cle].force;
-    $(`#f-${e.cle}`).disabled = !reglages[e.cle].actif;
+    const r = reglages[e.cle];
+    const tuile = $(`#m-${e.cle}`);
+    tuile.classList.toggle('active', r.actif);
+    tuile.setAttribute('aria-pressed', String(r.actif));
+    $(`#d-${e.cle}`).hidden = !r.actif;
+    $(`#f-${e.cle}`).value = r.force;
+
+    // Le bloc change de camp selon qu'il est posé ou disponible
+    const bloc = $(`#b-${e.cle}`);
+    const foyer = r.actif ? $('#posees') : $('#matieres');
+    if (bloc.parentElement !== foyer) foyer.appendChild(bloc);
+
+    const vue = etat.vignettes[e.cle];
+    $(`#ap-${e.cle}`).style.backgroundImage = vue ? `url(${vue})` : 'none';
+
     const axe = $(`#a-${e.cle}`);
-    if (axe) {
-      axe.value = reglages[e.cle].angle || 0;
-      axe.disabled = !reglages[e.cle].actif;
-      $(`#va-${e.cle}`).textContent = reglages[e.cle].actif ? axe.value + '°' : '';
-    }
-    const croix = $('#x-' + e.cle);
-    if (croix) {
-      croix.checked = !!reglages[e.cle].croise;
-      croix.disabled = !reglages[e.cle].actif;
-    }
+    if (axe) { axe.value = r.angle || 0; $(`#va-${e.cle}`).textContent = axe.value + '°'; }
     afficherValeur(e);
   });
-  $('#forme-halftone').value = reglages.halftone.forme || 'round';
-  $('#forme-halftone').disabled = !reglages.halftone.actif;
-  $('#note-cible').textContent = etat.cible
-    ? "Ces matières ne s'appliquent qu'à cette image."
-    : "Ces matières s'appliquent aux images sans réglage propre.";
+  $('#x-mosh').checked = !!reglages.mosh.croise;
+  document.querySelectorAll('.forme').forEach(b =>
+    b.classList.toggle('active', b.dataset.forme === (reglages.halftone.forme || 'round')));
 }
 
-// --- tirages déjà faits ------------------------------------------------------
-async function chargerTirages() {
-  const d = await (await fetch('/api/exports')).json();
-  const zone = $('#tirages');
-  if (!d.exports.length) {
-    zone.innerHTML = '<div class="note">Aucun tirage pour l\'instant.</div>';
-    return;
-  }
-  zone.innerHTML = d.exports.map((t, i) => `
-    <div class="tirage ${t.complete ? '' : 'incomplet'}" data-rang="${i}">
-      <b>graine ${t.seed}</b>
-      <em>${t.complete ? t.name : 'images sources introuvables'}</em>
-    </div>`).join('');
-
-  zone.querySelectorAll('.tirage:not(.incomplet)').forEach(el => {
-    el.onclick = () => appliquer(d.exports[parseInt(el.dataset.rang)].recipe);
-  });
-}
-
-function appliquer(r) {
-  etat.choisies = r.sources.slice();
-  peindreChoix();
-  $('#graine').value = r.seed;
-  $('#seuil').value = r.threshold;
-  if (r.bleed !== undefined) $('#bavure').value = r.bleed;
-  if (r.full_frame !== undefined) poserCadrage(r.full_frame);
-  $('#lissage').value = r.smoothness;
-  $('#bords').value = r.edge_blur;
-  $('#debordement').checked = r.overflow;
-  ['seuil', 'lissage', 'bords', 'bavure'].forEach(id => {
-    $('#v-' + id).textContent = UNITES[id] ? UNITES[id]($('#' + id).value) : $('#' + id).value;
-  });
-
-  const versReglages = liste => {
-    const actifs = Object.fromEntries((liste || []).map(e => [e.name, e]));
-    return Object.fromEntries(EFFETS.map(e => [e.cle, {
-      actif: actifs[e.cle] !== undefined,
-      force: actifs[e.cle]?.strength ?? e.defaut,
-      forme: actifs[e.cle]?.shape ?? 'round',
-      angle: actifs[e.cle]?.angle ?? 0,
-      croise: actifs[e.cle]?.cross ?? false,
-    }]));
-  };
-  etat.effets = versReglages(r.effects);
-  etat.propres = {};
-  (r.per_image || []).forEach((groupe, i) => {
-    if (groupe !== null && r.sources[i]) etat.propres[r.sources[i]] = versReglages(groupe);
-  });
-  // L'axe et l'instant ne voyagent que si l'image les portait
-  AXE.forEach(cle => { if (r[cle] !== undefined) $('#' + cle).value = r[cle]; });
-  BASCULES.forEach(cle => { if (r[cle] !== undefined) $('#' + cle).checked = r[cle]; });
-  if (r.frames !== undefined) ajusterAxe(Math.round(r.frames));
-  if (r.moment !== undefined) $('#temps').value = Math.min(r.moment, etat.totalFrames - 1);
-  montrerTemps();
-  montrerAxe();
-
-  etat.cible = '';
-  peindreChoix();
-  rendre();
+function afficherValeur(e) {
+  const { actif, force } = reglagesCourants()[e.cle];
+  // Une fraction de toile se lit mal : on la montre en pixels sur le format visé
+  const lu = e.enPixels
+    ? `${Math.max(2, Math.round(force * parseInt($('#taille').value)))} px`
+    : `${force.toFixed(2)} ${e.unite}`;
+  $(`#v-${e.cle}`).textContent = actif ? lu : '';
+  $(`#vf-${e.cle}`).textContent = lu;
 }
 
 // --- rendu ------------------------------------------------------------------
@@ -744,10 +870,10 @@ function corps(extra = {}) {
     per_image: etat.choisies.map(
       chemin => etat.propres[chemin] ? enListe(etat.propres[chemin]) : null),
     threshold: parseInt($('#seuil').value),
-    bleed: parseFloat($('#bavure').value),
-    full_frame: etat.pleinCadre,
     smoothness: parseFloat($('#lissage').value),
     edge_blur: parseInt($('#bords').value),
+    bleed: parseFloat($('#bavure').value),
+    full_frame: etat.pleinCadre,
     overflow: $('#debordement').checked,
     moment: parseInt($('#temps').value),
     fps: 24,
@@ -757,7 +883,10 @@ function corps(extra = {}) {
   };
 }
 
+let minuterie = null, enCours = false, aRefaire = false;
+
 function demanderRendu() {
+  peindreJauges();
   clearTimeout(minuterie);
   minuterie = setTimeout(rendre, 140);   // on laisse le curseur se poser
 }
@@ -792,7 +921,7 @@ async function rendre() {
 
     const instant = parseInt($('#temps').value);
     $('#etat').textContent =
-      `${etat.choisies.length} image${etat.choisies.length > 1 ? 's' : ''} · `
+      `${etat.choisies.length} couche${etat.choisies.length > 1 ? 's' : ''} · `
       + `graine ${graine} · instant ${instant + 1}/${etat.totalFrames}`
       + ` · ${Math.round(performance.now() - depart)} ms`;
   } catch (e) {
@@ -808,10 +937,8 @@ async function rendre() {
 async function exporter() {
   if (!etat.choisies.length) return;
   const bouton = $('#exporter'), taille = parseInt($('#taille').value);
-  bouton.disabled = true;
-  bouton.textContent = 'Calcul…';
-  $('#resultat').textContent = '';
-  $('#resultat').className = 'note';
+  bouton.disabled = true; bouton.textContent = 'Calcul…';
+  $('#resultat').textContent = ''; $('#resultat').className = 'resultat';
 
   try {
     const r = await fetch('/api/export', {
@@ -820,26 +947,25 @@ async function exporter() {
     });
     const d = await r.json();
     if (!r.ok) throw new Error(d.error);
-    $('#resultat').className = 'note reussite';
+    $('#resultat').className = 'resultat abouti';
     $('#resultat').textContent = `${d.centimetres} cm à 300 dpi → ${d.path}`;
     chargerTirages();
   } catch (e) {
     $('#resultat').textContent = e.message;
   } finally {
-    bouton.disabled = false;
-    bouton.textContent = 'Tirer cet instant';
+    bouton.disabled = false; bouton.textContent = 'Tirer cet instant';
   }
 }
 
 async function tirerVideo() {
   if (etat.choisies.length < 2) {
-    $('#resultat').className = 'note';
-    $('#resultat').textContent = 'Il faut au moins deux images pour une séquence.';
+    $('#resultat').className = 'resultat';
+    $('#resultat').textContent = 'Il faut au moins deux couches pour une séquence.';
     return;
   }
   const bouton = $('#tirer-video'), taille = parseInt($('#taille').value);
   bouton.disabled = true;
-  $('#resultat').className = 'note';
+  $('#resultat').className = 'resultat';
 
   try {
     const lance = await (await fetch('/api/video', {
@@ -851,24 +977,82 @@ async function tirerVideo() {
     // Le calcul dure des minutes : on suit son avancement
     while (true) {
       await new Promise(r => setTimeout(r, 1000));
-      const etatTravail = await (await fetch('/api/job?id=' + lance.job)).json();
-      if (etatTravail.state === 'fini') {
-        $('#resultat').className = 'note reussite';
-        $('#resultat').textContent = `${etatTravail.written} images → ${etatTravail.path}`;
+      const travail = await (await fetch('/api/job?id=' + lance.job)).json();
+      if (travail.state === 'fini') {
+        $('#resultat').className = 'resultat abouti';
+        $('#resultat').textContent = `${travail.written} images → ${travail.path}`;
         break;
       }
-      if (etatTravail.state === 'échec') throw new Error(etatTravail.error);
-      const part = Math.round(100 * (etatTravail.done || 0) / (etatTravail.total || 1));
+      if (travail.state === 'échec') throw new Error(travail.error);
+      const part = Math.round(100 * (travail.done || 0) / (travail.total || 1));
       bouton.textContent = `${part} %`;
-      $('#resultat').textContent = `${etatTravail.done} / ${etatTravail.total} images`;
+      $('#resultat').textContent = `${travail.done} / ${travail.total} images`;
     }
   } catch (e) {
     $('#resultat').textContent = e.message;
   } finally {
-    bouton.disabled = false;
-    bouton.textContent = "Tirer tout l'axe en vidéo";
+    bouton.disabled = false; bouton.textContent = "Tirer tout l'axe en vidéo";
   }
 }
+
+// --- reprendre --------------------------------------------------------------
+async function chargerTirages() {
+  const d = await (await fetch('/api/exports')).json();
+  const zone = $('#tirages');
+  if (!d.exports || !d.exports.length) {
+    zone.innerHTML = '<p class="note">Aucun tirage pour l\'instant.</p>';
+    return;
+  }
+  zone.innerHTML = d.exports.map((t, i) => `
+    <div class="tirage ${t.complete ? '' : 'incomplet'}" data-rang="${i}">
+      <b>graine ${t.seed}</b>
+      <em>${t.complete ? t.name : 'images sources introuvables'}</em>
+    </div>`).join('');
+
+  zone.querySelectorAll('.tirage:not(.incomplet)').forEach(el => {
+    el.onclick = () => appliquer(d.exports[parseInt(el.dataset.rang)].recipe);
+  });
+}
+
+function appliquer(r) {
+  etat.choisies = r.sources.slice();
+  $('#graine').value = r.seed;
+  $('#seuil').value = r.threshold;
+  $('#lissage').value = r.smoothness;
+  $('#bords').value = r.edge_blur;
+  $('#debordement').checked = r.overflow;
+  if (r.bleed !== undefined) $('#bavure').value = r.bleed;
+  if (r.full_frame !== undefined) poserCadrage(r.full_frame);
+
+  const versReglages = liste => {
+    const actifs = Object.fromEntries((liste || []).map(e => [e.name, e]));
+    return Object.fromEntries(EFFETS.map(e => [e.cle, {
+      actif: actifs[e.cle] !== undefined,
+      force: actifs[e.cle]?.strength ?? e.defaut,
+      forme: actifs[e.cle]?.shape ?? 'round',
+      angle: actifs[e.cle]?.angle ?? 0,
+      croise: actifs[e.cle]?.cross ?? false,
+    }]));
+  };
+  etat.effets = versReglages(r.effects);
+  etat.propres = {};
+  (r.per_image || []).forEach((groupe, i) => {
+    if (groupe !== null && r.sources[i]) etat.propres[r.sources[i]] = versReglages(groupe);
+  });
+  etat.cible = '';
+
+  // L'axe et l'instant ne voyagent que si l'image les portait
+  AXE.forEach(cle => { if (r[cle] !== undefined) $('#' + cle).value = r[cle]; });
+  BASCULES.forEach(cle => { if (r[cle] !== undefined) $('#' + cle).checked = r[cle]; });
+  if (r.frames !== undefined) ajusterAxe(Math.round(r.frames));
+  if (r.moment !== undefined) $('#temps').value = Math.min(r.moment, etat.totalFrames - 1);
+  montrerTemps(); montrerAxe(); montrerMorsure();
+
+  peindreChoix();
+  rendre();
+}
+
+// --- l'axe ------------------------------------------------------------------
 
 // L'axe garde la longueur réglée ; la position suit si elle la dépasse.
 function ajusterAxe(total) {
@@ -880,65 +1064,103 @@ function ajusterAxe(total) {
   montrerTemps();
 }
 
-// Les réglages du temps ne font rien tant qu'on est à l'instant 0 : bouger
-// un curseur sans rien voir bouger est le plus sûr moyen de ne pas comprendre
-// à quoi il sert.
+// Les réglages du temps ne font rien tant qu'on est au premier instant :
+// bouger un curseur sans rien voir bouger est le plus sûr moyen de ne pas
+// comprendre à quoi il sert.
 function noterTemps() {
   const debut = parseInt($('#temps').value) === 0;
   const note = $('#note-temps');
-  note.classList.toggle('alerte', debut);
+  note.style.color = debut ? 'var(--ferment)' : 'var(--spore)';
   note.textContent = debut
-    ? "Ces réglages ne mordent qu'une fois l'axe engagé. À l'instant 1, la composition est intacte : avancez la barre sous l'aperçu pour les voir agir."
+    ? "Ces réglages ne mordent qu'une fois l'axe engagé. Avancez la barre sous l'aperçu."
     : "Comment la matière se défait à mesure qu'on avance sur l'axe.";
 }
 
 function montrerTemps() {
   $('#v-temps').textContent = `${parseInt($('#temps').value) + 1} / ${etat.totalFrames}`;
   noterTemps();
+  peindreJauges();
 }
+
+function poserCadrage(plein) {
+  etat.pleinCadre = !!plein;
+  document.querySelectorAll('[data-cadre]').forEach(b =>
+    b.classList.toggle('tenu', (b.dataset.cadre === 'plein') === etat.pleinCadre));
+}
+
+// --- les bulles d'aide ------------------------------------------------------
+let aideOuverte = null;
+
+function fermerAide() {
+  $('#bulle').style.display = 'none';
+  if (aideOuverte) aideOuverte.classList.remove('ouverte');
+  aideOuverte = null;
+}
+
+function brancherAides() {
+  const bulle = $('#bulle');
+  document.querySelectorAll('label[for], .matiere').forEach(hote => {
+    const cible = hote.dataset.cle
+      || (hote.getAttribute('for') || '').replace(/^(on|f|a)-/, '');
+    const texte = AIDES[cible];
+    if (!texte) return;
+    const ligne = hote.classList.contains('matiere')
+      ? hote.querySelector('.titre') : hote.parentElement;
+    if (!ligne || ligne.querySelector('.aide')) return;
+
+    const bouton = document.createElement('button');
+    bouton.className = 'aide';
+    bouton.type = 'button';
+    bouton.textContent = '?';
+    bouton.setAttribute('aria-label', 'À quoi sert ce réglage');
+    ligne.appendChild(bouton);
+
+    bouton.onclick = ev => {
+      ev.stopPropagation(); ev.preventDefault();
+      if (aideOuverte === bouton) return fermerAide();
+      fermerAide();
+      aideOuverte = bouton;
+      bouton.classList.add('ouverte');
+      bulle.textContent = texte;
+      bulle.style.display = 'block';
+      const r = bouton.getBoundingClientRect();
+      const large = bulle.offsetWidth, haute = bulle.offsetHeight;
+      bulle.style.left = Math.max(8, r.left - large - 10) + 'px';
+      bulle.style.top = Math.min(window.innerHeight - haute - 8,
+                                 Math.max(8, r.top - 6)) + 'px';
+    };
+  });
+}
+
+document.addEventListener('click', fermerAide);
+document.addEventListener('keydown', e => { if (e.key === 'Escape') fermerAide(); });
 
 // --- branchements -----------------------------------------------------------
 const UNITES = { seuil: v => v + ' %', bavure: v => Math.round(v * 100) + ' %' };
-['seuil', 'lissage', 'bords', 'bavure'].forEach(id => {
-  const el = $('#' + id);
-  const montrer = () => {
-    $('#v-' + id).textContent = UNITES[id] ? UNITES[id](el.value) : el.value;
-  };
-  el.oninput = () => { montrer(); demanderRendu(); };
-  montrer();
+function montrerMorsure() {
+  MORSURE.forEach(id => {
+    $('#v-' + id).textContent = UNITES[id] ? UNITES[id]($('#' + id).value) : $('#' + id).value;
+  });
+}
+MORSURE.forEach(id => {
+  $('#' + id).oninput = () => { montrerMorsure(); demanderRendu(); };
 });
-$('#hasard').onclick = async () => {
-  const bouton = $('#hasard');
-  bouton.disabled = true;
-  try {
-    const famille = $('#famille').value;
-    const d = await (await fetch('/api/chance' + (famille ? '?family=' + famille : ''))).json();
-    if (d.error) { $('#note-hasard').textContent = d.error; return; }
-    appliquer(d.recipe);   // un tirage se reprend comme un export
-  } finally {
-    bouton.disabled = false;
-  }
-};
-$('#debordement').onchange = demanderRendu;
-$('#graine').onchange = demanderRendu;
-$('#relancer').onclick = () => { $('#graine').value = ''; rendre(); };
-$('#taille').onchange = () => { EFFETS.forEach(afficherValeur); montrerAxe(); };
-$('#exporter').onclick = exporter;
 
-// Les réglages de l'axe portent tous le même nom côté page et côté serveur.
-const CHIFFRES = { frames: v => `${v} images`, stagger: v => `${Math.round(v * 100)} %`,
-                   residue: v => `${Math.round(v * 100)} %`,
-                   tearing: v => `${Math.round(v * 100)} %`,
-                   ripening: v => `× ${(1 + parseFloat(v)).toFixed(1)}`,
-                   segment_growth: v => `× ${(1 + parseFloat(v)).toFixed(1)}` };
+const CHIFFRES = {
+  frames: v => `${v} images`, stagger: v => `${Math.round(v * 100)} %`,
+  residue: v => `${Math.round(v * 100)} %`, tearing: v => `${Math.round(v * 100)} %`,
+  ripening: v => `× ${(1 + parseFloat(v)).toFixed(1)}`,
+  segment_growth: v => `× ${(1 + parseFloat(v)).toFixed(1)}`,
+};
+function montrerAxe() { AXE.forEach(cle => $('#' + cle).dispatchEvent(new Event('afficher'))); }
+
 AXE.forEach(cle => {
   const el = $('#' + cle);
   const montrer = () => {
-    const brut = el.value;
     $('#v-' + cle).textContent = CHIFFRES[cle]
-      ? CHIFFRES[cle](brut)
+      ? CHIFFRES[cle](el.value)
       // Les longueurs sont des fractions de toile : on les montre en pixels
-      : `${Math.max(1, Math.round(brut * parseInt($('#taille').value)))} px`;
+      : `${Math.max(1, Math.round(el.value * parseInt($('#taille').value)))} px`;
   };
   el.oninput = () => {
     montrer();
@@ -950,27 +1172,37 @@ AXE.forEach(cle => {
 });
 BASCULES.forEach(cle => { $('#' + cle).onchange = demanderRendu; });
 
-// Rafraîchir l'affichage de tous les réglages d'axe d'un coup, après une
-// reprise ou un changement de format.
-function montrerAxe() { AXE.forEach(cle => $('#' + cle).dispatchEvent(new Event('afficher'))); }
-
 $('#temps').oninput = () => { montrerTemps(); demanderRendu(); };
+$('#debordement').onchange = demanderRendu;
+$('#graine').onchange = demanderRendu;
+$('#relancer').onclick = () => { $('#graine').value = ''; rendre(); };
+$('#taille').onchange = () => { EFFETS.forEach(afficherValeur); montrerAxe(); };
+$('#exporter').onclick = exporter;
+$('#tirer-video').onclick = tirerVideo;
+$('#dossier').onchange = () => changerDossier($('#dossier').value);
+$('#cible').onchange = () => { etat.cible = $('#cible').value; peindreChoix(); };
 
-function poserCadrage(plein) {
-  etat.pleinCadre = !!plein;
-  document.querySelectorAll('[data-cadre]').forEach(b =>
-    b.classList.toggle('actif', (b.dataset.cadre === 'plein') === etat.pleinCadre));
-}
 document.querySelectorAll('[data-cadre]').forEach(b => {
   b.onclick = () => { poserCadrage(b.dataset.cadre === 'plein'); demanderRendu(); };
 });
-$('#dossier').onchange = () => changerDossier($('#dossier').value);
-$('#cible').onchange = () => { etat.cible = $('#cible').value; peindreEffets(); };
-$('#tirer-video').onclick = tirerVideo;
 
-montrerTemps();
-batirEffets();
+$('#hasard').onclick = async () => {
+  const bouton = $('#hasard');
+  bouton.disabled = true;
+  try {
+    const famille = $('#famille').value;
+    const d = await (await fetch('/api/chance' + (famille ? '?family=' + famille : ''))).json();
+    if (d.error) { $('#etat').textContent = d.error; return; }
+    appliquer(d.recipe);   // un tirage se reprend comme un export
+  } finally {
+    bouton.disabled = false;
+  }
+};
+
+batirMatieres();
 brancherAides();
+montrerMorsure();
+montrerTemps();
 chargerSources();
 chargerTirages();
 </script>

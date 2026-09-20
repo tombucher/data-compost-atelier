@@ -505,11 +505,15 @@ def blend_into(canvas, weights, tile, weight, x: int, y: int) -> None:
     weights[y0:y1, x0:x1] += poids
 
 
-def render(recipe: Recipe, size: int = PREVIEW_SIZE, sources=None) -> np.ndarray:
+def render(recipe: Recipe, size: int = PREVIEW_SIZE, sources=None,
+           fields=None) -> np.ndarray:
     """Rend la composition sur une toile carrée de `size` pixels.
 
     `sources` permet de passer des images déjà chargées, pour éviter de relire
-    les fichiers à chaque mouvement de curseur.
+    les fichiers à chaque mouvement de curseur. `fields` permet d'y joindre
+    leurs cartes de saillance quand on rend plusieurs fois les mêmes images :
+    le résidu spectral se calcule à taille fixe, donc son coût ne baisse pas
+    avec celui du rendu et finit par le dominer.
     """
     images = sources if sources is not None else [load_source(p) for p in recipe.sources]
     if not images:
@@ -521,8 +525,9 @@ def render(recipe: Recipe, size: int = PREVIEW_SIZE, sources=None) -> np.ndarray
     for index, (image, placement) in enumerate(zip(images, placements_for(recipe))):
         target, x, y = layer_geometry(image, placement, size, recipe.full_frame)
         resized = cv2.resize(image, target, interpolation=cv2.INTER_AREA)
+        carte = fields[index] if fields is not None else saliency_of(image)
         saliency = smooth_mask(
-            cv2.resize(saliency_of(image), target, interpolation=cv2.INTER_LINEAR),
+            cv2.resize(carte, target, interpolation=cv2.INTER_LINEAR),
             recipe.smoothness,
             recipe.edge_blur,
         )

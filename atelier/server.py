@@ -33,7 +33,17 @@ import numpy as np
 
 from atelier.chance import random_recipe
 from atelier.decay import Decay, compose_at, count_frames, sequence
-from atelier.engine import Effect, Recipe, load_source, new_seed
+from atelier.engine import (
+    EFFECTS,
+    HALFTONE_SHAPES,
+    Effect,
+    Recipe,
+    load_source,
+    new_seed,
+    rank_field,
+    render,
+    spot_field,
+)
 from atelier.metadata import read_payload, read_recipe, save_with_recipe
 from atelier.video import write_video
 
@@ -45,6 +55,18 @@ IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".tif", ".tiff", ".bmp", ".webp"}
 # Taille de l'aperçu. Assez grande pour juger, assez petite pour suivre un
 # curseur : environ deux dixièmes de seconde sur quatre images.
 PREVIEW = 900
+
+# Taille des vignettes qui montrent ce que fait chaque matière. Une matière
+# qu'on active à l'aveugle est une matière qu'on n'essaie pas ; à cette
+# taille, les sept se calculent en une centaine de millisecondes.
+VIGNETTE = 132
+
+# Forces employées pour ces vignettes : assez marquées pour se reconnaître au
+# premier coup d'œil, ce qui n'est pas la même chose qu'un réglage utile.
+VIGNETTE_FORCES = {
+    "pixelate": 0.020, "bitmap": 0.95, "saturate": 3.0, "halftone": 0.030,
+    "pixelsort": 0.09, "mosh": 0.07, "shift": 0.020,
+}
 THUMBNAIL = 220
 
 
@@ -55,9 +77,16 @@ class Library:
     que le rendu lui-même.
     """
 
+    # Taille de la copie de travail. Réduire une photo de 5000 px vers 130
+    # d'un seul coup coûte 25 fois plus cher que de passer par une étape
+    # intermédiaire — l'aperçu payait ce prix à chaque mouvement de curseur.
+    # Les tirages, eux, partent toujours de la pleine résolution.
+    WORK_SIZE = 2048
+
     def __init__(self, root: Path):
         self.root = root.expanduser().resolve()
         self._cache: dict[Path, np.ndarray] = {}
+        self._work: dict[Path, np.ndarray] = {}
         self._lock = threading.Lock()
 
     def move_to(self, raw: str):
@@ -72,6 +101,7 @@ class Library:
         with self._lock:
             self.root = target
             self._cache.clear()
+            self._work.clear()
 
     def neighbours(self) -> list[dict]:
         """Dossiers voisins contenant des images, pour changer de série.
@@ -126,12 +156,33 @@ class Library:
             raise ValueError("chemin hors du dossier de travail")
         return path
 
-    def image(self, raw: str) -> np.ndarray:
+    def image(self, raw: str, for_size: int | None = None) -> np.ndarray:
+        """L'image source, ou une copie de travail quand la cible est petite.
+
+        Un rendu jusqu'à la moitié de `WORK_SIZE` ne perd rien de visible à
+        partir de la copie : il allait de toute façon réduire davantage. Au
+        delà, la pleine résolution est servie, pour que les tirages gardent
+        tout leur détail.
+        """
         path = self.resolve(raw)
         with self._lock:
             if path not in self._cache:
                 self._cache[path] = load_source(path)
-            return self._cache[path]
+            pleine = self._cache[path]
+
+            if for_size is None or for_size * 2 > self.WORK_SIZE:
+                return pleine
+            if max(pleine.shape[:2]) <= self.WORK_SIZE:
+                return pleine
+            if path not in self._work:
+                facteur = self.WORK_SIZE / max(pleine.shape[:2])
+                self._work[path] = cv2.resize(
+                    pleine,
+                    (max(1, int(pleine.shape[1] * facteur)),
+                     max(1, int(pleine.shape[0] * facteur))),
+                    interpolation=cv2.INTER_AREA,
+                )
+            return self._work[path]
 
 
 def decay_from_request(body: dict) -> Decay:
@@ -207,8 +258,13 @@ def run_video_job(job_id: str, recipe, decay, size, images, target: Path):
             JOBS[job_id].update(state="échec", error=str(exc))
 
 
-def recipe_from_request(body: dict, library: Library) -> tuple[Recipe, list]:
-    """Construit une recette et charge ses images."""
+def recipe_from_request(body: dict, library: Library,
+                        for_size: int | None = None) -> tuple[Recipe, list]:
+    """Construit une recette et charge ses images.
+
+    `for_size` dit à quelle taille on va rendre : une copie de travail suffit
+    pour un aperçu, un tirage veut la pleine résolution.
+    """
     paths = [str(library.resolve(p)) for p in body.get("sources", [])]
     if not paths:
         raise ValueError("aucune image choisie")
@@ -237,7 +293,7 @@ def recipe_from_request(body: dict, library: Library) -> tuple[Recipe, list]:
         edge_blur=int(body.get("edge_blur", 0)),
         saturation_overflow=bool(body.get("overflow", True)),
     )
-    return recipe, [library.image(p) for p in paths]
+    return recipe, [library.image(p, for_size=for_size) for p in paths]
 
 
 AXE_KEYS = tuple(decay_payload(Decay())) + ("moment",)
@@ -330,6 +386,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._job(query.get("id", [""])[0])
             if route.path == "/api/chance":
                 return self._chance(query.get("family", [""])[0])
+            if route.path == "/api/motif":
+                return self._motif(query.get("shape", ["round"])[0])
             return self._static(route.path.lstrip("/"))
         except Exception as exc:  # noqa: BLE001 — une requête ne tue pas le serveur
             self._fail(exc)
@@ -339,6 +397,8 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if route.path == "/api/render":
                 return self._render()
+            if route.path == "/api/vignettes":
+                return self._vignettes()
             if route.path == "/api/export":
                 return self._export()
             if route.path == "/api/folder":
@@ -425,6 +485,65 @@ class Handler(BaseHTTPRequestHandler):
         payload["family"] = family or "au hasard"
         self._json({"recipe": payload})
 
+    def _motif(self, shape: str):
+        """Le motif d'une forme de trame, à mi-densité.
+
+        Dessiné à partir du champ que le moteur emploie réellement, pas d'une
+        icône redessinée à la main : ce qu'on voit dans le menu est ce que la
+        trame produira.
+        """
+        shape = shape if shape in HALFTONE_SHAPES else "round"
+        cellule, tuiles = 16, 3
+        champ = spot_field(cellule, shape) if shape == "round" \
+            else rank_field(cellule, shape)
+        seuil = cellule / 4 if shape == "round" else 0.5
+        motif = np.tile((champ <= seuil).astype(np.uint8) * 255, (tuiles, tuiles))
+        cote = cellule * tuiles
+        image = cv2.resize(motif, (cote * 2, cote * 2),
+                           interpolation=cv2.INTER_NEAREST)
+        ok, encode = cv2.imencode(".png", image)
+        if not ok:
+            raise ValueError("motif illisible")
+        self._send(200, encode.tobytes(), "image/png")
+
+    def _vignettes(self):
+        """Ce que fait chaque matière, sur les images en cours.
+
+        Chacune est rendue seule, à force marquée, pour qu'on reconnaisse son
+        geste. Ce ne sont pas des aperçus du réglage courant mais des
+        échantillons de matière — comme on montre un nuancier, pas un mur
+        peint.
+        """
+        body = self._body()
+        recipe, images = recipe_from_request(body, self.library,
+                                             for_size=VIGNETTE)
+
+        # Les huit vignettes partagent les mêmes cartes de saillance : les
+        # recalculer huit fois coûterait plus cher que les huit rendus.
+        from atelier.decay import prepare_fields
+        cartes = prepare_fields(recipe, images)
+
+        rendus = {"nu": self._jpeg64(
+            render(recipe, size=VIGNETTE, sources=images, fields=cartes))}
+        for nom in EFFECTS:
+            essai = Recipe(
+                sources=recipe.sources, seed=recipe.seed,
+                effects=(Effect(nom, VIGNETTE_FORCES[nom]),),
+                saliency_threshold=recipe.saliency_threshold,
+                smoothness=recipe.smoothness, edge_blur=recipe.edge_blur,
+                # Les tris ne se voient pas s'ils restent dans la zone calme
+                bleed=0.85 if nom in ("pixelsort", "mosh") else recipe.bleed,
+                full_frame=recipe.full_frame,
+            )
+            rendus[nom] = self._jpeg64(
+                render(essai, size=VIGNETTE, sources=images, fields=cartes))
+        self._json({"vignettes": rendus})
+
+    def _jpeg64(self, image) -> str:
+        import base64
+        return "data:image/jpeg;base64," + base64.b64encode(
+            self._jpeg(image, 78)).decode("ascii")
+
     def _render(self):
         """L'aperçu, à l'instant demandé de l'axe.
 
@@ -433,9 +552,9 @@ class Handler(BaseHTTPRequestHandler):
         dans le temps.
         """
         body = self._body()
-        recipe, images = recipe_from_request(body, self.library)
-        decay = decay_from_request(body)
         size = int(body.get("size") or PREVIEW)
+        recipe, images = recipe_from_request(body, self.library, for_size=size)
+        decay = decay_from_request(body)
         index = max(0, min(int(body.get("moment", 0)), count_frames(decay) - 1))
 
         image = compose_at(recipe, decay, size, index, images)

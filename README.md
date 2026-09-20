@@ -70,13 +70,29 @@ images et tous les réglages, et l'aperçu apparaît. Rien n'y est figé : tout
 ce qu'il a posé se reprend à la main ensuite. Le menu à côté restreint le
 tirage à une veine — trame, bitmap, pixellisation ou saturation.
 
-Sinon, à la main : à gauche, cliquer les images dans l'ordre où elles doivent
-se superposer. À droite, activer les matières et régler. L'aperçu se recalcule
-en continu : sur trois images, comptez 0,2 s pour une composition simple, 0,6 s
-avec un tri, et environ 1 s pour un instant pris au milieu de l'axe.
+Sinon, à la main : à gauche, cliquer les images du dossier dans l'ordre où
+elles doivent se superposer. Elles s'empilent alors dans **la pile**, la
+dernière posée en haut — c'est celle que le temps défait la première. Chaque
+strate porte sur son flanc une jauge qui montre où elle en est à l'instant
+courant, et deux boutons pour la remonter dans la pile ou l'en retirer ;
+cliquer sa vignette la règle à part du reste.
+
+À droite, les matières sont des tuiles qui **montrent ce qu'elles font** sur
+les images en cours, avant qu'on les active. Celles qu'on pose montent en
+haut du panneau et s'ouvrent sur leurs réglages ; les autres attendent en
+dessous. Les sept formes de trame sont des pastilles montrant le motif exact
+que la trame produira.
+
+L'aperçu se recalcule en continu : sur trois images, comptez 0,2 s pour une
+composition simple, 0,6 s avec un tri, et environ 1 s pour un instant pris au
+milieu de l'axe.
 
 Quand une composition tient, choisir un format et **Tirer**. Le fichier part
 dans `sorties/`, avec sa recette à l'intérieur.
+
+Les vignettes des matières se recalculent quand la pile change, en une
+seconde environ. Elles montrent chaque matière seule et à force marquée : ce
+sont des échantillons, comme un nuancier, pas l'aperçu du réglage courant.
 
 Un tirage déjà fait réapparaît sous **Reprendre** : un clic restaure ses
 images, sa graine, son instant sur l'axe et tous ses réglages. C'est le seul
