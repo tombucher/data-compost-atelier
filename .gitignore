@@ -17,3 +17,6 @@ sorties/
 
 # Pytest
 .pytest_cache/
+
+# Outillage local : chemins absolus propres à la machine
+.claude/

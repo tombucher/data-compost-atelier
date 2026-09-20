@@ -6,7 +6,7 @@ des préférences supposées, ils viennent de mesures.
 
 ## Ce que dit le corpus
 
-Les 230 œuvres de `le corpus conservé de 2024/` ont été mesurées sur quatre
+Les 230 œuvres conservées de 2024 ont été mesurées sur quatre
 grandeurs : contraste (écart-type des gris), saturation moyenne, part de
 pixels en noir ou blanc purs, et énergie haute fréquence (laplacien).
 
