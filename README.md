@@ -220,8 +220,8 @@ d'évidement, et la composition doit rester celle qu'on a réglée.
 
 ## Le cadrage
 
-Tout ce qui touche au cadre se tient sous l'aperçu. Deux boutons disent
-comment les images occupent la toile.
+Deux boutons au milieu de la barre du haut disent comment les images
+occupent la toile.
 
 **Dans le cadre** pose chaque image entière dans la toile, ce qui laisse le
 fond noir visible autour. C'est le réglage par défaut.
