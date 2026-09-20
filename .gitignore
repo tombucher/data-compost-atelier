@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.py[cod]
+
+# Environnement virtuel
+venv/
+.venv/
+
+# OS
+.DS_Store
+
+# Rendus : reproductibles depuis leur graine, pas besoin de les versionner
+sorties/
+*.png
+*.jpg
+!web/**/*.png
+
+# Pytest
+.pytest_cache/
