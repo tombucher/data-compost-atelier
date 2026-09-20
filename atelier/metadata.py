@@ -69,7 +69,7 @@ def recipe_from_json(raw: str, sources=None) -> Recipe:
             else tuple(Effect(e["name"], float(e["strength"])) for e in group)
             for group in data.get("per_image", ())
         ),
-        saliency_threshold=int(data.get("saliency_threshold", 120)),
+        saliency_threshold=int(data.get("saliency_threshold", 60)),
         smoothness=float(data.get("smoothness", 3.0)),
         edge_blur=int(data.get("edge_blur", 0)),
         saturation_overflow=bool(data.get("saturation_overflow", True)),

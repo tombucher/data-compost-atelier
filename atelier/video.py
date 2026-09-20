@@ -305,12 +305,18 @@ def transition(
 
     for index in range(frames):
         yield _one_frame(first, second, masks_first[index], masks_second[index],
-                         index, frames, late, side, motion, recipe.seed, pair)
+                         index, frames, late, side, motion, recipe.seed, pair,
+                         recipe)
 
 
 def _one_frame(first, second, keep, reveal, index, frames, late, side,
-               motion, seed, pair):
-    """Une frame, calculable indépendamment des autres."""
+               motion, seed, pair, recipe=None):
+    """Une frame, calculable indépendamment des autres.
+
+    Les matières de la voie image — trame, bitmap, pixellisation, saturation —
+    s'appliquent aussi ici, chacune avec le réglage propre de son image. Rien
+    n'obligeait à séparer les deux voies.
+    """
     if True:
         rng, flips = frame_draw(seed, pair, index)
         progress = index / (frames - 1)
@@ -359,7 +365,17 @@ def _one_frame(first, second, keep, reveal, index, frames, late, side,
             revealed = second
 
         blend = keep[:, :, None]
-        return (revealed * (1.0 - blend) + undone * blend).astype(np.uint8)
+        composed = (revealed * (1.0 - blend) + undone * blend).astype(np.uint8)
+
+        if recipe is not None:
+            from atelier.engine import apply_effects, effects_for, saliency_of
+
+            matieres = effects_for(recipe, pair)
+            if matieres:
+                composed = apply_effects(
+                    composed, saliency_of(composed), recipe, side, matieres
+                )
+        return composed
 
 
 def render_sequence(recipe: Recipe, motion: Motion, size: int, sources=None):
@@ -424,6 +440,7 @@ def render_frame(recipe: Recipe, motion: Motion, size: int, index: int,
     return _one_frame(
         first, second, masks_first[local], masks_second[local],
         local, per_pair, late, max(first.shape[:2]), motion, recipe.seed, pair,
+        recipe,
     )
 
 

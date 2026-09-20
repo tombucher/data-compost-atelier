@@ -38,7 +38,9 @@ SOURCE_SPAN = 800 / 1024
 # Taille de rendu par défaut pour l'exploration
 PREVIEW_SIZE = 1024
 
-EFFECTS = ("pixelate", "bitmap", "saturate", "halftone")
+# Les quatre matières de blending-image2.py, plus les deux venues de la voie
+# vidéo : rien n'obligeait à les tenir séparées.
+EFFECTS = ("pixelate", "bitmap", "saturate", "halftone", "pixelsort", "shift")
 
 
 @dataclass(frozen=True)
@@ -70,7 +72,12 @@ class Recipe:
     # réglage commun, un tuple — même vide — pour le remplacer. Permet de
     # tramer une image, d'en pixelliser une autre, et d'en laisser une nette.
     per_image: tuple[tuple[Effect, ...] | None, ...] = ()
-    saliency_threshold: int = 120
+    # Part de l'image livrée aux matières, en pour-cent, des zones les moins
+    # saillantes vers les plus saillantes. Exprimé en centile et non en valeur
+    # brute : la carte de saillance est si concentrée — médiane 0,02 — qu'un
+    # seuil brut au-delà de 30 sur 255 recouvrait déjà tout. Les neuf dixièmes
+    # de la course du réglage ne servaient à rien.
+    saliency_threshold: int = 60
     smoothness: float = 3.0
     edge_blur: int = 0
     # Le débordement uint8 de la saturation, préservé tel quel : seize œuvres
@@ -240,7 +247,9 @@ def apply_effects(
     l'original et fait l'image : le sujet reste net et se sature, le fond se
     décompose.
     """
-    quiet = saliency < recipe.saliency_threshold
+    part = float(np.clip(recipe.saliency_threshold, 0, 100)) / 100.0
+    quiet = saliency < np.quantile(saliency, part) if 0 < part < 1 \
+        else (np.ones_like(saliency, bool) if part >= 1 else np.zeros_like(saliency, bool))
     result = image
 
     for effect in (recipe.effects if effects is None else effects):
@@ -254,6 +263,20 @@ def apply_effects(
             )
         elif effect.name == "halftone":
             result = apply_halftone(result, quiet, effect.pixels(canvas))
+        elif effect.name == "pixelsort":
+            # Importé ici : video importe engine, l'inverse au chargement
+            # ferait un cycle.
+            from atelier.video import pixel_sort
+
+            low = effect.pixels(canvas, minimum=4)
+            result = pixel_sort(result, quiet, "brightness", False, low, low * 4)
+        elif effect.name == "shift":
+            from atelier.video import shift_channels
+
+            result = shift_channels(
+                result, effect.pixels(canvas, minimum=1),
+                random.Random(f"{recipe.seed}:shift"),
+            )
 
     return result
 

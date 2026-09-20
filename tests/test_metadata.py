@@ -18,7 +18,7 @@ def recipe():
         sources=("/un/chemin/fleur.jpg", "/un/chemin/pavot.jpg"),
         seed=987654,
         effects=(Effect("halftone", 0.012), Effect("saturate", 2.0)),
-        saliency_threshold=140,
+        saliency_threshold=70,
         smoothness=2.5,
         edge_blur=3,
         saturation_overflow=True,

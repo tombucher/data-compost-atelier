@@ -164,6 +164,18 @@
     <button class="mode" data-mode="video">Vidéo</button>
   </div>
 
+  <div class="rangee" style="margin-bottom:6px">
+    <button class="principal" id="hasard" style="flex:1">Au hasard</button>
+    <select id="famille" style="width:auto" title="Dans quelle veine tirer">
+      <option value="">toutes veines</option>
+      <option value="halftone">trame</option>
+      <option value="bitmap">bitmap</option>
+      <option value="pixelate">pixellisation</option>
+      <option value="saturate">saturation</option>
+    </select>
+  </div>
+  <div class="note" id="note-hasard">Tire images et réglages d'après les 230 œuvres conservées. Tout reste modifiable ensuite.</div>
+
   <h2>Matières</h2>
   <select id="cible" title="À quelle image appliquer ces matières"></select>
   <div id="effets"></div>
@@ -171,8 +183,9 @@
 
   <h2>Saillance</h2>
   <div class="effet">
-    <div class="ligne"><label for="seuil">Seuil</label><span class="valeur" id="v-seuil"></span></div>
-    <input type="range" id="seuil" min="0" max="255" step="1" value="120">
+    <div class="ligne"><label for="seuil">Part dégradée</label><span class="valeur" id="v-seuil"></span></div>
+    <input type="range" id="seuil" min="0" max="100" step="1" value="60">
+    <div class="note">La part de l'image livrée aux matières, du plus calme au plus saillant.</div>
   </div>
   <div class="effet">
     <div class="ligne"><label for="lissage">Lissage</label><span class="valeur" id="v-lissage"></span></div>
@@ -232,11 +245,15 @@
 </aside>
 
 <script>
+// `enPixels` marque les forces exprimées en fraction de toile : elles se
+// lisent mieux converties au format visé.
 const EFFETS = [
-  { cle:'pixelate', nom:'Pixellisation', min:0.002, max:0.05,  pas:0.001, defaut:0.008, unite:'grain' },
-  { cle:'bitmap',   nom:'Bitmap',        min:0,     max:1,     pas:0.01,  defaut:0.70,  unite:'mélange' },
-  { cle:'saturate', nom:'Saturation',    min:1,     max:4,     pas:0.05,  defaut:2.00,  unite:'×' },
-  { cle:'halftone', nom:'Trame',         min:0.003, max:0.04,  pas:0.001, defaut:0.010, unite:'grain' },
+  { cle:'pixelate', nom:'Pixellisation', min:0.002, max:0.05, pas:0.001, defaut:0.008, enPixels:true },
+  { cle:'bitmap',   nom:'Bitmap',        min:0,     max:1,    pas:0.01,  defaut:0.70,  unite:'mélange' },
+  { cle:'saturate', nom:'Saturation',    min:1,     max:4,    pas:0.05,  defaut:2.00,  unite:'×' },
+  { cle:'halftone', nom:'Trame',         min:0.003, max:0.04, pas:0.001, defaut:0.010, enPixels:true },
+  { cle:'pixelsort',nom:'Tri de pixels', min:0.005, max:0.15, pas:0.005, defaut:0.040, enPixels:true },
+  { cle:'shift',    nom:'Décalage RVB',  min:0.001, max:0.04, pas:0.001, defaut:0.008, enPixels:true },
 ];
 
 function reglagesNeufs() {
@@ -295,8 +312,8 @@ function afficherValeur(e) {
   const { actif, force } = reglagesCourants()[e.cle];
   const champ = $(`#v-${e.cle}`);
   if (!actif) { champ.textContent = ''; return; }
-  // Un grain exprimé en fraction se lit mal : on le montre en pixels sur le format visé
-  champ.textContent = e.unite === 'grain'
+  // Une fraction de toile se lit mal : on la montre en pixels sur le format visé
+  champ.textContent = e.enPixels
     ? `${Math.max(2, Math.round(force * parseInt($('#taille').value)))} px`
     : `${force.toFixed(2)} ${e.unite}`;
 }
@@ -413,7 +430,9 @@ function appliquer(r) {
   $('#lissage').value = r.smoothness;
   $('#bords').value = r.edge_blur;
   $('#debordement').checked = r.overflow;
-  ['seuil', 'lissage', 'bords'].forEach(id => { $('#v-' + id).textContent = $('#' + id).value; });
+  ['seuil', 'lissage', 'bords'].forEach(id => {
+    $('#v-' + id).textContent = id === 'seuil' ? $('#' + id).value + ' %' : $('#' + id).value;
+  });
 
   const versReglages = liste => {
     const actifs = Object.fromEntries((liste || []).map(e => [e.name, e.strength]));
@@ -592,10 +611,24 @@ function basculer(mode) {
 // --- branchements -----------------------------------------------------------
 ['seuil', 'lissage', 'bords'].forEach(id => {
   const el = $('#' + id);
-  const montrer = () => { $('#v-' + id).textContent = el.value; };
+  const montrer = () => {
+    $('#v-' + id).textContent = id === 'seuil' ? el.value + ' %' : el.value;
+  };
   el.oninput = () => { montrer(); demanderRendu(); };
   montrer();
 });
+$('#hasard').onclick = async () => {
+  const bouton = $('#hasard');
+  bouton.disabled = true;
+  try {
+    const famille = $('#famille').value;
+    const d = await (await fetch('/api/chance' + (famille ? '?family=' + famille : ''))).json();
+    if (d.error) { $('#note-hasard').textContent = d.error; return; }
+    appliquer(d.recipe);   // un tirage se reprend comme un export
+  } finally {
+    bouton.disabled = false;
+  }
+};
 $('#debordement').onchange = demanderRendu;
 $('#graine').onchange = demanderRendu;
 $('#relancer').onclick = () => { $('#graine').value = ''; rendre(); };

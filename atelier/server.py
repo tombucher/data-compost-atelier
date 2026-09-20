@@ -31,6 +31,7 @@ from urllib.parse import parse_qs, unquote, urlparse
 import cv2
 import numpy as np
 
+from atelier.chance import random_recipe
 from atelier.engine import (
     Effect,
     PREVIEW_SIZE,
@@ -203,12 +204,30 @@ def recipe_from_request(body: dict, library: Library) -> tuple[Recipe, list]:
         seed=int(body.get("seed") or new_seed()),
         effects=effects,
         per_image=tuple(group(g) for g in body.get("per_image", [])),
-        saliency_threshold=int(body.get("threshold", 120)),
+        saliency_threshold=int(body.get("threshold", 60)),
         smoothness=float(body.get("smoothness", 3.0)),
         edge_blur=int(body.get("edge_blur", 0)),
         saturation_overflow=bool(body.get("overflow", True)),
     )
     return recipe, [library.image(p) for p in paths]
+
+
+def recipe_payload(recipe, sources=None) -> dict:
+    """La recette telle que l'interface l'attend."""
+    return {
+        "sources": list(recipe.sources if sources is None else sources),
+        "seed": recipe.seed,
+        "effects": [{"name": e.name, "strength": e.strength} for e in recipe.effects],
+        "per_image": [
+            None if g is None
+            else [{"name": e.name, "strength": e.strength} for e in g]
+            for g in recipe.per_image
+        ],
+        "threshold": recipe.saliency_threshold,
+        "smoothness": recipe.smoothness,
+        "edge_blur": recipe.edge_blur,
+        "overflow": recipe.saturation_overflow,
+    }
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -268,6 +287,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._exports()
             if route.path == "/api/job":
                 return self._job(query.get("id", [""])[0])
+            if route.path == "/api/chance":
+                return self._chance(query.get("family", [""])[0])
             return self._static(route.path.lstrip("/"))
         except Exception as exc:  # noqa: BLE001 — une requête ne tue pas le serveur
             self._fail(exc)
@@ -313,15 +334,7 @@ class Handler(BaseHTTPRequestHandler):
         found = read_recipe(Path(raw).expanduser())
         if found is None:
             return self._json({"recipe": None})
-        self._json({"recipe": {
-            "seed": found.seed,
-            "sources": list(found.sources),
-            "effects": [{"name": e.name, "strength": e.strength} for e in found.effects],
-            "threshold": found.saliency_threshold,
-            "smoothness": found.smoothness,
-            "edge_blur": found.edge_blur,
-            "overflow": found.saturation_overflow,
-        }})
+        self._json({"recipe": recipe_payload(found)})
 
     def _exports(self):
         """Les tirages déjà faits, avec la recette que chacun porte.
@@ -352,23 +365,25 @@ class Handler(BaseHTTPRequestHandler):
                 "name": path.name,
                 "seed": recipe.seed,
                 "complete": complete,
-                "recipe": {
-                    "sources": sources,
-                    "seed": recipe.seed,
-                    "effects": [{"name": e.name, "strength": e.strength}
-                                for e in recipe.effects],
-                    "per_image": [
-                        None if g is None
-                        else [{"name": e.name, "strength": e.strength} for e in g]
-                        for g in recipe.per_image
-                    ],
-                    "threshold": recipe.saliency_threshold,
-                    "smoothness": recipe.smoothness,
-                    "edge_blur": recipe.edge_blur,
-                    "overflow": recipe.saturation_overflow,
-                },
+                "recipe": recipe_payload(recipe, sources),
             })
         self._json({"exports": found[:40]})
+
+    def _chance(self, family: str):
+        """Tire une recette dans les habitudes du corpus conservé.
+
+        Le tirage ne rend rien : il renvoie des réglages, que l'interface
+        applique comme si on les avait posés à la main. Ce qui suit reste
+        modifiable, et la graine permet d'y revenir.
+        """
+        paths = [entry["path"] for entry in self.library.listing()]
+        if not paths:
+            return self._json({"error": "aucune image dans ce dossier"}, 400)
+
+        recipe = random_recipe(paths, family=family or None)
+        payload = recipe_payload(recipe)
+        payload["family"] = family or "au hasard"
+        self._json({"recipe": payload})
 
     def _render(self):
         body = self._body()

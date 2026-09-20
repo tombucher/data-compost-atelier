@@ -44,8 +44,13 @@ local, les images ne quittent pas le disque.
 
 ## Utiliser
 
-À gauche, cliquer les images dans l'ordre où elles doivent se superposer. À
-droite, activer les matières et régler. L'aperçu se recalcule en continu —
+Le plus court chemin : **Au hasard**, en haut à droite. Le bouton tire les
+images et tous les réglages, et l'aperçu apparaît. Rien n'y est figé : tout
+ce qu'il a posé se reprend à la main ensuite. Le menu à côté restreint le
+tirage à une veine — trame, bitmap, pixellisation ou saturation.
+
+Sinon, à la main : à gauche, cliquer les images dans l'ordre où elles doivent
+se superposer. À droite, activer les matières et régler. L'aperçu se recalcule en continu —
 environ 150 ms sur trois images.
 
 Quand une composition tient, choisir un format et **Tirer**. Le fichier part
@@ -75,9 +80,36 @@ le sujet reste net et se sature, le fond se décompose.
 | Bitmap | Bascule en noir et blanc, mélangée à l'original |
 | Saturation | Rehausse les couleurs du sujet |
 | Trame | Points de taille variable, façon similigravure |
+| Tri de pixels | Réordonne les pixels par bandes, venu de la voie vidéo |
+| Décalage RVB | Sépare les canaux de couleur, venu de la voie vidéo |
 
-Le grain de la pixellisation et de la trame est exprimé en fraction de la
-toile, pas en pixels : il garde la même allure à toutes les tailles.
+Les forces marquées d'un grain — pixellisation, trame, tri, décalage — sont
+exprimées en fraction de la toile, pas en pixels : elles gardent la même
+allure à toutes les tailles. L'interface les affiche converties au format
+visé.
+
+Le curseur **Part dégradée** dit quelle proportion de l'image revient aux
+matières, de la zone la plus calme à la plus saillante. C'est un percentile :
+à 60, les 60 % les moins saillants se décomposent. Exprimé en valeur brute de
+saillance, comme au début, la moitié haute du curseur ne servait à rien — les
+cartes de saillance sont très concentrées vers le bas.
+
+### Au hasard
+
+Le tirage ne choisit pas uniformément. Les 230 œuvres de 2024 ont été mesurées
+sur quatre grandeurs — contraste, saturation, part de noir et blanc purs,
+énergie haute fréquence — et les deux séries que Tom avait rangées par
+technique ont servi à classer les autres. Il en ressort une répartition :
+trame 53 %, bitmap 23 %, pixellisation 17 %, saturation 7 %. Le tirage suit
+ces parts, et les forces de chaque veine sont réglées pour retomber sur les
+mesures de sa famille.
+
+Deux réglages viennent directement des chiffres : le bitmap ne descend pas
+sous 0,85, sinon le seuillage reste mêlé à l'image et le noir et blanc francs
+n'apparaît pas ; et le débordement de saturation, qui ne concerne que 16
+œuvres sur 230, ne se tire qu'une fois sur sept.
+
+Ce qui reste en écart et pourquoi, c'est écrit dans `atelier/chance.py`.
 
 ### Le débordement de saturation
 
@@ -104,7 +136,12 @@ que la recette survit à l'aller-retour dans l'image.
 
 ## La voie vidéo
 
-Bascule **Vidéo** en haut à droite. Les mêmes images et les mêmes matières,
+Bascule **Vidéo** en haut à droite. Les deux voies partagent tout : les
+matières de l'image s'appliquent à chaque image de la séquence, réglages par
+image compris, et le tri de pixels comme le décalage de canaux — nés du
+datamoshing — sont disponibles sur une image fixe.
+
+Les mêmes images et les mêmes matières,
 plus une transition : la première image se décompose par seuils de saillance
 pendant que la suivante se révèle dessous, avec un tri de pixels par segments.
 
