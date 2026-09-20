@@ -360,6 +360,7 @@ const AIDES = {
   saturate: "Pousse les couleurs. C'est la seule matière qui s'attaque au sujet et non au fond : ce qui attire l'œil devient criard pendant que le reste se défait.",
   halftone: "Remplace les gris par des points plus ou moins gros, comme une image de journal. Le curseur règle la taille de la cellule, le menu la forme du point.",
   pixelsort: "Réordonne les pixels par bandes, du sombre au clair. L'image coule en traînées, comme un fichier abîmé.",
+  'x-mosh': "Envoie le vert perpendiculairement au rouge et au bleu, ce qui croise les coulées. L'original le faisait, mais sa bizarrerie laissait souvent le vert seul canal trié : on ne voyait qu'une direction. Décoché, les trois canaux coulent dans le même sens.",
   mosh: "Trie chaque canal de couleur séparément, chacun avec sa longueur et son sens. Les couleurs se décollent les unes des autres — c'est de là que vient la séparation colorée du datamoshing.",
   shift: "Déplace le rouge et le bleu en sens opposés. L'image se dédouble en franges colorées.",
   'forme-halftone': "La forme du point. La ronde est celle de l'original ; elle rend plus clair que les autres, parce que son point grossit moins vite. Sous cinq ou six pixels de cellule, les formes ne se distinguent plus.",
@@ -446,7 +447,7 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') fermerAide()
 
 function reglagesNeufs() {
   return Object.fromEntries(EFFETS.map(
-    e => [e.cle, { actif:false, force:e.defaut, forme:'round', angle:0 }]));
+    e => [e.cle, { actif:false, force:e.defaut, forme:'round', angle:0, croise:false }]));
 }
 
 // Les réglages de l'axe, tels que le serveur les attend. Curseurs et cases
@@ -493,6 +494,9 @@ function batirEffets() {
       <div class="sous-reglage">
         <div class="ligne"><label for="a-${e.cle}">axe</label><span class="valeur" id="va-${e.cle}"></span></div>
         <input type="range" id="a-${e.cle}" min="0" max="175" step="5" value="0" disabled>
+        ${e.cle === 'mosh' ? `<div class="ligne" style="margin-top:6px">
+          <input type="checkbox" id="x-mosh" disabled>
+          <label for="x-mosh">croiser les canaux</label></div>` : ''}
       </div>` : ''}
     </div>`).join('');
 
@@ -503,6 +507,8 @@ function batirEffets() {
       reglagesCourants()[e.cle].actif = bascule.checked;
       curseur.disabled = !bascule.checked;
       if (axe) axe.disabled = !bascule.checked;
+      const croix = $('#x-' + e.cle);
+      if (croix) croix.disabled = !bascule.checked;
       afficherValeur(e); peindreChoix(); demanderRendu();
       if (e.cle === 'halftone') $('#forme-halftone').disabled = !bascule.checked;
     };
@@ -513,6 +519,11 @@ function batirEffets() {
     if (axe) axe.oninput = () => {
       reglagesCourants()[e.cle].angle = parseFloat(axe.value);
       $(`#va-${e.cle}`).textContent = axe.value + '°';
+      demanderRendu();
+    };
+    const croix = $('#x-' + e.cle);
+    if (croix) croix.onchange = () => {
+      reglagesCourants()[e.cle].croise = croix.checked;
       demanderRendu();
     };
     afficherValeur(e);
@@ -630,6 +641,11 @@ function peindreEffets() {
       axe.disabled = !reglages[e.cle].actif;
       $(`#va-${e.cle}`).textContent = reglages[e.cle].actif ? axe.value + '°' : '';
     }
+    const croix = $('#x-' + e.cle);
+    if (croix) {
+      croix.checked = !!reglages[e.cle].croise;
+      croix.disabled = !reglages[e.cle].actif;
+    }
     afficherValeur(e);
   });
   $('#forme-halftone').value = reglages.halftone.forme || 'round';
@@ -679,6 +695,7 @@ function appliquer(r) {
       force: actifs[e.cle]?.strength ?? e.defaut,
       forme: actifs[e.cle]?.shape ?? 'round',
       angle: actifs[e.cle]?.angle ?? 0,
+      croise: actifs[e.cle]?.cross ?? false,
     }]));
   };
   etat.effets = versReglages(r.effects);
@@ -705,6 +722,7 @@ function enListe(reglages) {
     name: e.cle, strength: reglages[e.cle].force,
     shape: reglages[e.cle].forme || 'round',
     angle: reglages[e.cle].angle || 0,
+    cross: !!reglages[e.cle].croise,
   }));
 }
 

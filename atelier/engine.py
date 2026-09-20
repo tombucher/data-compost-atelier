@@ -61,6 +61,10 @@ class Effect:
     # Propre à chaque matière : une trame à 45° sur un tri à l'horizontale
     # est une combinaison qu'un angle commun interdirait.
     angle: float = 0.0
+    # Datamoshing seul : envoyer le vert perpendiculairement aux deux autres
+    # canaux, ce qui croise les coulées. L'original le faisait, mais sans
+    # jamais le montrer — voir sort_channels_separately.
+    cross: bool = False
 
     def pixels(self, canvas: int, minimum: int = 2) -> int:
         """Convertit la force en pixels pour une toile donnée."""
@@ -432,7 +436,7 @@ def apply_effects(
                     img, msk, False, canvas,
                     random.Random(f"{recipe.seed}:mosh"),
                     np.random.default_rng(recipe.seed),
-                    False, low, low * 4,
+                    False, low, low * 4, effect.cross,
                 ),
             )
 

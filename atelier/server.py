@@ -212,7 +212,7 @@ def recipe_from_request(body: dict, library: Library) -> tuple[Recipe, list]:
 
     def matiere(e) -> Effect:
         return Effect(e["name"], float(e["strength"]), e.get("shape", "round"),
-                      float(e.get("angle", 0.0)))
+                      float(e.get("angle", 0.0)), bool(e.get("cross", False)))
 
     effects = tuple(matiere(e) for e in body.get("effects", []) if e.get("name"))
 
@@ -242,7 +242,8 @@ AXE_KEYS = tuple(decay_payload(Decay())) + ("moment",)
 
 def _matiere_json(effect: Effect) -> dict:
     return {"name": effect.name, "strength": effect.strength,
-            "shape": effect.shape, "angle": effect.angle}
+            "shape": effect.shape, "angle": effect.angle,
+            "cross": effect.cross}
 
 
 def recipe_payload(recipe, sources=None, extra: dict | None = None) -> dict:

@@ -127,6 +127,7 @@ def sort_channels_separately(
     quirk: bool = True,
     minimum: int | None = None,
     maximum: int | None = None,
+    cross: bool = True,
 ) -> np.ndarray:
     """Trie chaque canal séparément : c'est de là que vient la séparation colorée.
 
@@ -144,6 +145,13 @@ def sort_channels_separately(
     Sans `minimum`/`maximum`, les longueurs de l'original s'appliquent. Avec,
     elles se règlent — mais les rapports entre canaux sont conservés, car
     c'est leur écart qui fait la séparation, pas leur valeur absolue.
+
+    `cross` envoie le vert perpendiculairement aux deux autres, comme le
+    faisait l'original. Cela n'y était presque jamais visible : la
+    bizarrerie ci-dessus laissait le rouge intact et le bleu trié une fois
+    sur deux, si bien que le vert était souvent le seul canal réellement
+    trié, et l'on ne voyait qu'une direction. Dès que les trois canaux
+    travaillent, la croix saute aux yeux — d'où le réglage.
     """
     blue, green, red = cv2.split(image)
 
@@ -173,9 +181,10 @@ def sort_channels_separately(
         grey = cv2.merge([channel, channel, channel])
         return pixel_sort(grey, mask, method, vert, low, high, flips)[:, :, 0]
 
+    vert_vertical = (not vertical) if cross else vertical
     return cv2.merge([
         one(blue, blue_method, vertical, blue_min, blue_max),
-        one(green, green_method, not vertical, green_min, green_max),
+        one(green, green_method, vert_vertical, green_min, green_max),
         one(red, red_method, vertical, red_min, red_max),
     ])
 

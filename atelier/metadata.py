@@ -38,12 +38,15 @@ def _effect_json(effect: Effect) -> dict:
         payload["shape"] = effect.shape
     if effect.angle:
         payload["angle"] = effect.angle
+    if effect.cross:
+        payload["cross"] = True
     return payload
 
 
 def _effect_from(raw: dict) -> Effect:
     return Effect(raw["name"], float(raw["strength"]),
-                  raw.get("shape", "round"), float(raw.get("angle", 0.0)))
+                  raw.get("shape", "round"), float(raw.get("angle", 0.0)),
+                  bool(raw.get("cross", False)))
 
 
 def recipe_to_json(recipe: Recipe, **extra) -> str:

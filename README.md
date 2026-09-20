@@ -101,6 +101,14 @@ sur une image arrêtée une graine sur quatre ne triait rien du tout. La
 séparation des couleurs tient de toute façon aux longueurs et aux directions
 propres à chaque canal.
 
+Cette correction a eu un effet de bord qu'il faut connaître. L'original
+envoie le vert perpendiculairement au rouge et au bleu, mais comme il ne
+triait presque jamais les deux autres, le vert était souvent le seul canal
+actif : on ne voyait qu'une direction. Les trois canaux travaillant
+désormais, la croix apparaît. Elle est devenue une case, **croiser les
+canaux**, décochée par défaut — les coulées suivent alors un seul sens,
+comme avant. L'axe du temps, lui, garde le comportement d'origine.
+
 Les matières qui réordonnent sans changer les valeurs — les deux tris — ont
 besoin de **bavure** pour se voir ; voir plus bas.
 

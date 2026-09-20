@@ -302,3 +302,60 @@ class TestTheSettingsTravel:
         from atelier.metadata import recipe_to_json
         recipe = Recipe(sources=("a",), seed=1, effects=(Effect("mosh", 0.03),))
         assert '"angle"' not in recipe_to_json(recipe)
+
+
+class TestTheMoshDirection:
+    """Le vert partait perpendiculairement aux deux autres, sans qu'on l'ait voulu.
+
+    Ce n'est pas une invention : l'original envoie bien le vert à
+    contre-sens. Mais sa bizarrerie laissait le rouge intact et le bleu trié
+    une fois sur deux, si bien que le vert était souvent le seul canal
+    réellement trié — on ne voyait donc qu'une direction. Rendre les trois
+    canaux actifs a rendu la croix visible d'un coup.
+    """
+
+    @staticmethod
+    def _sens(image):
+        """Écart entre variation horizontale et verticale : plus il est
+        grand, plus les coulées vont dans un seul sens."""
+        gris = image.astype(float)
+        horiz = float(np.abs(np.diff(gris, axis=1)).mean())
+        verti = float(np.abs(np.diff(gris, axis=0)).mean())
+        return abs(horiz - verti)
+
+    def _rendu(self, photos, croise):
+        chemins, images = photos
+        return render(
+            Recipe(sources=tuple(chemins), seed=7, bleed=1.0,
+                   effects=(Effect("mosh", 0.03, "round", 0.0, croise),)),
+            size=400, sources=images)
+
+    def test_uncrossed_keeps_a_single_direction(self, photos):
+        droit = self._sens(self._rendu(photos, False))
+        croise = self._sens(self._rendu(photos, True))
+        assert droit > croise * 1.5, (
+            "décroisé, les coulées doivent aller dans un seul sens "
+            f"(asymétrie {droit:.1f} contre {croise:.1f})"
+        )
+
+    def test_it_is_uncrossed_by_default(self):
+        assert Effect("mosh", 0.03).cross is False
+
+    def test_crossing_changes_the_image(self, photos):
+        assert not np.array_equal(self._rendu(photos, False),
+                                  self._rendu(photos, True))
+
+    def test_the_axis_keeps_the_original_behaviour(self):
+        """Dans l'axe du temps, le vert reste à contre-sens comme en 2025."""
+        import inspect
+
+        from atelier.video import sort_channels_separately
+        defaut = inspect.signature(sort_channels_separately).parameters["cross"].default
+        assert defaut is True
+
+    def test_it_survives_the_metadata(self, tmp_path):
+        recipe = Recipe(sources=("a.jpg",), seed=3,
+                        effects=(Effect("mosh", 0.03, "round", 0.0, True),))
+        back = read_recipe(save_with_recipe(
+            np.zeros((32, 32, 3), np.uint8), tmp_path / "o.png", recipe))
+        assert back.effects[0].cross is True
