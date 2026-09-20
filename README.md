@@ -99,11 +99,23 @@ exprimées en fraction de la toile, pas en pixels : elles gardent la même
 allure à toutes les tailles. L'interface les affiche converties au format
 visé.
 
-Le curseur **Part dégradée** dit quelle proportion de l'image revient aux
-matières, de la zone la plus calme à la plus saillante. C'est un percentile :
-à 60, les 60 % les moins saillants se décomposent. Exprimé en valeur brute de
-saillance, comme au début, la moitié haute du curseur ne servait à rien — les
-cartes de saillance sont très concentrées vers le bas.
+### La saillance
+
+Trois curseurs décident *où* les matières mordent.
+
+**Part dégradée** dit quelle proportion de l'image leur revient, de la zone la
+plus calme à la plus saillante. C'est un percentile : à 60, les 60 % les moins
+saillants se décomposent. Exprimé en valeur brute de saillance, comme au
+début, la moitié haute du curseur ne servait à rien — les cartes de saillance
+sont très concentrées vers le bas.
+
+**Lissage** floute la carte avant de s'en servir. Au minimum, les zones
+dégradées ont des bords hachés ; en montant, elles se fondent dans le reste.
+
+**Contours seuls** remplace la carte par son gradient : il ne reste que le
+pourtour des zones saillantes, pas leur intérieur. L'image se réduit alors à
+un liseré autour de son sujet, dont le centre disparaît de la composition.
+À 0, le réglage est inactif.
 
 ### Les formes de trame
 
@@ -206,10 +218,21 @@ sort à 4000 ou 8000 px.
 | Allongement | De combien les segments s'étirent à mesure que l'image se défait. |
 | Décalage RVB | La séparation des canaux rouge et bleu, qui croît avec le temps. |
 
+Ces réglages ne mordent qu'une fois l'axe engagé : à l'instant 1 la
+composition est intacte, et les bouger n'y change rien. Le panneau le dit.
+
 Les quatre bascules de **Fidélité** disent quoi garder de l'original : le
 tri par canaux séparés, le rouge jamais trié, le tri sur la zone visible, la
 dissolution par quantiles. Les trois dernières sont des corrections — voir
 plus bas — et se décochent pour retrouver le rendu de 2025.
+
+### Où sont passées les explications
+
+Chaque réglage porte un petit `?` : le survol du libellé donne une phrase sur
+ce qu'il fait concrètement à l'image. Les explications étaient auparavant
+posées sous les curseurs, où elles se lisaient comme l'introduction du bloc
+suivant. Seules les notes qui présentent une section entière restent à
+l'écran, sous leur titre et marquées d'un trait.
 
 ### Pourquoi l'original ne montrait pas de datamoshing
 

@@ -146,6 +146,24 @@
   button:disabled { opacity: .4; cursor: default; }
   .rangee { display: flex; gap: 6px; }
   .note { font-size: 11px; color: var(--discret); margin-top: 8px; line-height: 1.45; }
+  /* Une note de section suit son titre et s'en détache nettement, pour qu'on
+     ne la prenne pas pour le commentaire du réglage précédent. */
+  .note.bloc { margin: -8px 0 14px; padding-left: 8px; border-left: 2px solid var(--bord); }
+  .note.bloc.alerte { border-left-color: var(--accent); color: #c5b98c; }
+
+  /* Infobulle : le panneau défile, donc la bulle est posée en position fixe
+     par le script plutôt qu'en absolu, qui serait rogné. */
+  label[data-aide] { cursor: help; }
+  label[data-aide]::after {
+    content: "?"; font-size: 9px; vertical-align: super;
+    color: var(--discret); margin-left: 3px;
+  }
+  #bulle {
+    position: fixed; z-index: 50; max-width: 260px; display: none;
+    background: #0c0c0a; color: var(--texte); border: 1px solid #45453c;
+    border-radius: 5px; padding: 8px 10px; font-size: 11.5px; line-height: 1.5;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, .55); pointer-events: none;
+  }
   .note.reussite { color: var(--accent); word-break: break-all; }
 </style>
 </head>
@@ -162,6 +180,8 @@
   <h2>Reprendre</h2>
   <div id="tirages"><div class="note">Aucun tirage pour l'instant.</div></div>
 </aside>
+
+<div id="bulle"></div>
 
 <main>
   <img id="apercu" alt="aperçu" hidden>
@@ -191,15 +211,16 @@
   <div class="note" id="note-hasard">Tire images et réglages d'après les 230 œuvres conservées. Tout reste modifiable ensuite.</div>
 
   <h2>Matières</h2>
+  <div class="note bloc" id="note-cible"></div>
   <select id="cible" title="À quelle image appliquer ces matières"></select>
   <div id="effets"></div>
-  <div class="note" id="note-cible"></div>
 
   <h2>Saillance</h2>
+  <div class="note bloc">Où les matières mordent. Elles attaquent les zones
+  les plus calmes — le sujet, lui, reste net.</div>
   <div class="effet">
     <div class="ligne"><label for="seuil">Part dégradée</label><span class="valeur" id="v-seuil"></span></div>
     <input type="range" id="seuil" min="0" max="100" step="1" value="60">
-    <div class="note">La part de l'image livrée aux matières, du plus calme au plus saillant.</div>
   </div>
   <div class="effet">
     <div class="ligne"><label for="lissage">Lissage</label><span class="valeur" id="v-lissage"></span></div>
@@ -210,7 +231,8 @@
     <input type="range" id="bords" min="0" max="15" step="1" value="0">
   </div>
 
-  <h2>Décomposition</h2>
+  <h2>Le temps</h2>
+  <div class="note bloc" id="note-temps"></div>
   <div class="effet">
     <div class="ligne"><label for="frames">Durée</label><span class="valeur" id="v-frames"></span></div>
     <input type="range" id="frames" min="8" max="240" step="4" value="48">
@@ -218,27 +240,22 @@
   <div class="effet">
     <div class="ligne"><label for="stagger">Décalage entre couches</label><span class="valeur" id="v-stagger"></span></div>
     <input type="range" id="stagger" min="0" max="1" step="0.05" value="0.45">
-    <div class="note">À zéro toutes les images pourrissent ensemble. Au maximum elles s'effacent l'une après l'autre.</div>
   </div>
   <div class="effet">
     <div class="ligne"><label for="residue">Ce qui résiste</label><span class="valeur" id="v-residue"></span></div>
     <input type="range" id="residue" min="0" max="0.6" step="0.02" value="0.12">
-    <div class="note">La part la plus dense de chaque image, encore là à la fin. À zéro, la séquence s'éteint au noir.</div>
   </div>
-
-  <h2>Déchirure</h2>
   <div class="effet">
-    <div class="ligne"><label for="min_segment">Segment le plus court</label><span class="valeur" id="v-min_segment"></span></div>
+    <div class="ligne"><label for="min_segment">Déchirure la plus courte</label><span class="valeur" id="v-min_segment"></span></div>
     <input type="range" id="min_segment" min="0.004" max="0.2" step="0.002" value="0.03">
   </div>
   <div class="effet">
-    <div class="ligne"><label for="max_segment">Segment le plus long</label><span class="valeur" id="v-max_segment"></span></div>
+    <div class="ligne"><label for="max_segment">Déchirure la plus longue</label><span class="valeur" id="v-max_segment"></span></div>
     <input type="range" id="max_segment" min="0.01" max="0.5" step="0.005" value="0.10">
   </div>
   <div class="effet">
     <div class="ligne"><label for="segment_growth">Allongement</label><span class="valeur" id="v-segment_growth"></span></div>
     <input type="range" id="segment_growth" min="0" max="5" step="0.1" value="1.5">
-    <div class="note">De combien les segments s'étirent à mesure que l'image se défait.</div>
   </div>
   <div class="effet">
     <div class="ligne"><label for="channel_shift">Décalage RVB</label><span class="valeur" id="v-channel_shift"></span></div>
@@ -274,31 +291,18 @@
   <div class="note" id="resultat"></div>
 
   <h2>Fidélité</h2>
-  <div class="ligne">
-    <input type="checkbox" id="debordement" checked>
-    <label for="debordement">Débordement de saturation</label>
-  </div>
-  <div class="note">Le dépassement d'origine, qui casse les couleurs au-delà de 255. Seize œuvres de 2024 en dépendent.</div>
-  <div class="ligne" style="margin-top:12px">
-    <input type="checkbox" id="enhanced" checked>
-    <label for="enhanced">Trier les canaux séparément</label>
-  </div>
-  <div class="note">D'où vient la séparation colorée. Décoché, les trois canaux se trient ensemble.</div>
-  <div class="ligne" style="margin-top:12px">
-    <input type="checkbox" id="channel_quirk" checked>
-    <label for="channel_quirk">Laisser le rouge intact</label>
-  </div>
-  <div class="note">Un accident de l'original : le canal rouge n'était jamais réellement trié. C'est ce qui fait sa dominante.</div>
-  <div class="ligne" style="margin-top:12px">
-    <input type="checkbox" id="sort_visible" checked>
-    <label for="sort_visible">Trier ce qu'on voit</label>
-  </div>
-  <div class="note">L'original triait la zone en train de disparaître : son tri ne se voyait jamais. Décoché, on retrouve ce comportement.</div>
-  <div class="ligne" style="margin-top:12px">
-    <input type="checkbox" id="even_dissolve" checked>
-    <label for="even_dissolve">Dissolution régulière</label>
-  </div>
-  <div class="note">Les seuils suivent les quantiles de la saillance. Décoché, l'image se vide en deux images comme à l'origine.</div>
+  <div class="note bloc">Ce qu'on garde des accidents de l'original. Décocher
+  une case corrige le comportement ; le laisser coché reproduit 2024.</div>
+  <div class="ligne"><input type="checkbox" id="debordement" checked>
+    <label for="debordement">Débordement de saturation</label></div>
+  <div class="ligne"><input type="checkbox" id="enhanced" checked>
+    <label for="enhanced">Trier les canaux séparément</label></div>
+  <div class="ligne"><input type="checkbox" id="channel_quirk" checked>
+    <label for="channel_quirk">Laisser le rouge intact</label></div>
+  <div class="ligne"><input type="checkbox" id="sort_visible" checked>
+    <label for="sort_visible">Trier ce qu'on voit</label></div>
+  <div class="ligne"><input type="checkbox" id="even_dissolve" checked>
+    <label for="even_dissolve">Dissolution régulière</label></div>
 </aside>
 
 <script>
@@ -320,6 +324,74 @@ const FORMES = [
   ['line', 'ligne'], ['cross', 'croix'], ['ellipse', 'ellipse'],
   ['euclidean', 'euclidienne'],
 ];
+
+// Ce que chaque réglage fait à l'image. Le panneau en est plein, et une
+// phrase posée sous un curseur se lit comme le commentaire du suivant :
+// elles passent donc toutes en infobulle, attachées à leur libellé.
+const AIDES = {
+  // Matières
+  pixelate: "Remplace des blocs carrés par leur couleur moyenne. Le détail s'en va, la couleur reste. Plus le bloc est gros, plus l'image devient une mosaïque.",
+  bitmap: "Bascule en noir et blanc purs, sans aucun gris. Le curseur mélange ce noir et blanc avec l'image ; à fond, il ne reste que deux valeurs.",
+  saturate: "Pousse les couleurs. C'est la seule matière qui s'attaque au sujet et non au fond : ce qui attire l'œil devient criard pendant que le reste se défait.",
+  halftone: "Remplace les gris par des points plus ou moins gros, comme une image de journal. Le curseur règle la taille de la cellule, le menu la forme du point.",
+  pixelsort: "Réordonne les pixels par bandes, du sombre au clair. L'image coule en traînées, comme un fichier abîmé.",
+  mosh: "Trie chaque canal de couleur séparément, chacun avec sa longueur et son sens. Les couleurs se décollent les unes des autres — c'est de là que vient la séparation colorée du datamoshing.",
+  shift: "Déplace le rouge et le bleu en sens opposés. L'image se dédouble en franges colorées.",
+  'forme-halftone': "La forme du point. La ronde est celle de l'original ; elle rend plus clair que les autres, parce que son point grossit moins vite. Sous cinq ou six pixels de cellule, les formes ne se distinguent plus.",
+
+  // Saillance
+  seuil: "Quelle part de l'image les matières attaquent, en partant des zones les plus calmes. À 100 %, tout y passe, sujet compris. À 0, rien n'est touché.",
+  lissage: "Adoucit la carte de saillance avant de s'en servir. Au minimum, les zones dégradées ont des bords hachés ; en montant, elles se fondent dans le reste.",
+  bords: "Ne garde que le pourtour des zones saillantes, au lieu de leur intérieur. L'image se réduit à un liseré autour de son sujet — le centre disparaît de la composition.",
+
+  // Le temps
+  frames: "Le nombre d'images entre l'intact et le composté. Ne change pas la composition, seulement la finesse du parcours — et la durée de la vidéo.",
+  stagger: "À zéro, toutes les images pourrissent en même temps. Au maximum, elles s'effacent l'une après l'autre. Celle posée en dernier part toujours la première.",
+  residue: "La part la plus dense de chaque image, encore là à la fin. Un compost finit sur de l'humus ; à zéro, la séquence s'éteint au noir.",
+  min_segment: "La plus courte des bandes que le tri réordonne. Des bandes courtes donnent un grain nerveux, des bandes longues des coulées.",
+  max_segment: "La plus longue des bandes que le tri réordonne. C'est elle qui décide jusqu'où la matière peut s'étirer.",
+  segment_growth: "De combien les bandes s'allongent à mesure que l'image se défait. À zéro, la déchirure garde la même échelle du début à la fin.",
+  channel_shift: "De combien le rouge et le bleu s'écartent quand la matière pourrit. Croît avec le temps : nul à l'instant 0, maximal à la fin.",
+
+  // Fidélité
+  debordement: "Dans l'original, la saturation débordait au-delà de 255 et repassait par le bas : 150 × 2 donnait 44, et les couleurs cassaient. Seize œuvres de 2024 en vivent.",
+  enhanced: "Trie chaque canal à part, ce qui sépare les couleurs. Décoché, les trois canaux se trient ensemble et l'image reste grise.",
+  channel_quirk: "Un accident de l'original : le rouge n'était jamais réellement trié, ce qui donne sa dominante rouge au datamoshing. Décoché, les trois canaux sont traités pareil.",
+  sort_visible: "L'original triait la zone en train de disparaître, si bien que son tri ne se voyait jamais. Décoché, on retrouve exactement son rendu.",
+  even_dissolve: "Les seuils suivent les quantiles de la saillance, pour que la dissolution occupe tout l'axe. Décoché, l'image se vide en deux images comme à l'origine.",
+
+  // Tirage
+  graine: "Le nombre d'où sort toute la composition. Il ne sert qu'à revenir sur un tirage pour l'agrandir — il n'oblige à rien répéter.",
+  taille: "La taille du tirage. L'aperçu reste petit pour rester vif ; c'est ici que se décide la définition du fichier écrit.",
+};
+
+// Le panneau défile : la bulle est posée en position fixe au survol.
+function brancherAides() {
+  const bulle = $('#bulle');
+  document.querySelectorAll('label[for]').forEach(lab => {
+    // Les cases des matières s'appellent « on-halftone » : on retombe sur la
+    // clé de la matière elle-même.
+    const cible = lab.getAttribute('for').replace(/^on-/, '');
+    const texte = AIDES[cible];
+    if (!texte) return;
+    lab.dataset.aide = '1';
+    lab.onmouseenter = () => {
+      bulle.textContent = texte;
+      bulle.style.display = 'block';
+      const r = lab.getBoundingClientRect();
+      // Rabattue à gauche du libellé, et remontée si elle sort par le bas
+      const large = bulle.offsetWidth, haute = bulle.offsetHeight;
+      bulle.style.left = Math.max(8, r.left - large - 12) + 'px';
+      bulle.style.top = Math.min(window.innerHeight - haute - 8,
+                                 Math.max(8, r.top - 4)) + 'px';
+    };
+    lab.onmouseleave = () => { bulle.style.display = 'none'; };
+  });
+  // Le menu des formes n'a pas de libellé : il porte son aide lui-même
+  const menu = $('#forme-halftone');
+  if (menu) menu.title = AIDES['forme-halftone'];
+}
+
 
 function reglagesNeufs() {
   return Object.fromEntries(EFFETS.map(
@@ -703,8 +775,21 @@ function ajusterAxe(total) {
   montrerTemps();
 }
 
+// Les réglages du temps ne font rien tant qu'on est à l'instant 0 : bouger
+// un curseur sans rien voir bouger est le plus sûr moyen de ne pas comprendre
+// à quoi il sert.
+function noterTemps() {
+  const debut = parseInt($('#temps').value) === 0;
+  const note = $('#note-temps');
+  note.classList.toggle('alerte', debut);
+  note.textContent = debut
+    ? "Ces réglages ne mordent qu'une fois l'axe engagé. À l'instant 1, la composition est intacte : avancez la barre sous l'aperçu pour les voir agir."
+    : "Comment la matière se défait à mesure qu'on avance sur l'axe.";
+}
+
 function montrerTemps() {
   $('#v-temps').textContent = `${parseInt($('#temps').value) + 1} / ${etat.totalFrames}`;
+  noterTemps();
 }
 
 // --- branchements -----------------------------------------------------------
@@ -768,6 +853,7 @@ $('#tirer-video').onclick = tirerVideo;
 
 montrerTemps();
 batirEffets();
+brancherAides();
 chargerSources();
 chargerTirages();
 </script>
