@@ -1,0 +1,273 @@
+"""Le tri vectorisé doit rendre exactement ce que rendaient les boucles.
+
+Comme pour la trame, l'implémentation d'origine est recopiée ici et sert de
+juge. Sans elle, « vectorisé » serait une promesse.
+"""
+import random
+
+import cv2
+import numpy as np
+import pytest
+
+from atelier.engine import Recipe
+from atelier.video import (
+    Motion,
+    count_frames,
+    mask_sequence,
+    pixel_sort,
+    render_sequence,
+    shift_channels,
+    write_video,
+)
+
+
+# --- implémentation d'origine, recopiée de datamoshing4.py -----------------
+# Le tirage aléatoire d'inversion est retiré : il rendait toute comparaison
+# impossible, et c'est précisément ce que la graine remplace.
+
+def original_pixel_sort(image, mask, sort_method="brightness", vertical=False,
+                        min_length=20, max_length=100):
+    result = image.copy()
+    height, width = image.shape[:2]
+    mask_binary = (mask.astype(np.float32) > 0.5).astype(np.uint8)
+    if sort_method in ("hue", "saturation"):
+        hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+
+    def runs(line, length):
+        found, start = [], None
+        for i in range(length):
+            if line[i] and start is None:
+                start = i
+            elif (not line[i] or i == length - 1) and start is not None:
+                end = i if not line[i] else i + 1
+                if end - start > max_length:
+                    for sub in range(start, end, max_length):
+                        stop = min(sub + max_length, end)
+                        if stop - sub >= min_length:
+                            found.append((sub, stop))
+                elif end - start >= min_length:
+                    found.append((start, end))
+                start = None
+        return found
+
+    if vertical:
+        for x in range(width):
+            for start, end in runs(mask_binary[:, x], height):
+                segment = result[start:end, x].copy()
+                if sort_method == "hue":
+                    values = hsv[start:end, x, 0]
+                elif sort_method == "saturation":
+                    values = hsv[start:end, x, 1]
+                else:
+                    values = np.sum(segment, axis=1)
+                result[start:end, x] = segment[np.argsort(values, kind="stable")]
+    else:
+        for y in range(height):
+            for start, end in runs(mask_binary[y, :], width):
+                segment = result[y, start:end].copy()
+                if sort_method == "hue":
+                    values = hsv[y, start:end, 0]
+                elif sort_method == "saturation":
+                    values = hsv[y, start:end, 1]
+                else:
+                    values = np.sum(segment, axis=1)
+                result[y, start:end] = segment[np.argsort(values, kind="stable")]
+    return result
+
+
+@pytest.fixture
+def photo():
+    rng = np.random.default_rng(11)
+    blobs = rng.integers(0, 255, (12, 12, 3), dtype=np.uint8)
+    return cv2.resize(blobs, (192, 192), interpolation=cv2.INTER_CUBIC)
+
+
+@pytest.fixture
+def patchy():
+    """Un masque à plages de longueurs variées, pour éprouver le découpage."""
+    mask = np.zeros((192, 192), dtype=bool)
+    mask[10:40, :] = True      # plage moyenne
+    mask[60:180, :] = True     # plage longue, à découper
+    mask[:, 100:105] = False   # trous verticaux
+    mask[185:188, :] = True    # plage trop courte, à ne pas trier
+    return mask
+
+
+class TestPixelSortMatchesTheOriginal:
+    @pytest.mark.parametrize("vertical", [True, False])
+    @pytest.mark.parametrize("method", ["brightness", "hue", "saturation"])
+    def test_identical_output(self, photo, patchy, vertical, method):
+        mine = pixel_sort(photo, patchy, method, vertical, 20, 60)
+        theirs = original_pixel_sort(photo, patchy, method, vertical, 20, 60)
+        assert np.array_equal(mine, theirs)
+
+    @pytest.mark.parametrize("min_len,max_len", [(5, 20), (20, 60), (30, 250)])
+    def test_segment_lengths_agree(self, photo, patchy, min_len, max_len):
+        mine = pixel_sort(photo, patchy, "brightness", True, min_len, max_len)
+        theirs = original_pixel_sort(photo, patchy, "brightness", True, min_len, max_len)
+        assert np.array_equal(mine, theirs)
+
+    def test_full_mask(self, photo):
+        full = np.ones(photo.shape[:2], bool)
+        assert np.array_equal(
+            pixel_sort(photo, full, "brightness", True, 20, 60),
+            original_pixel_sort(photo, full, "brightness", True, 20, 60),
+        )
+
+    def test_empty_mask_changes_nothing(self, photo):
+        empty = np.zeros(photo.shape[:2], bool)
+        assert np.array_equal(pixel_sort(photo, empty, "brightness", True, 20, 60), photo)
+
+    def test_short_runs_are_left_alone(self, photo):
+        """Une plage plus courte que le minimum ne doit pas bouger."""
+        mask = np.zeros(photo.shape[:2], bool)
+        mask[50:55, :] = True                     # 5 pixels, minimum 20
+        out = pixel_sort(photo, mask, "brightness", True, 20, 60)
+        assert np.array_equal(out, photo)
+
+
+class TestSpeed:
+    def test_fast_enough_for_print_size(self, ):
+        """En 2000 px, la version d'origine demanderait des minutes par frame."""
+        import time
+        rng = np.random.default_rng(2)
+        image = rng.integers(0, 255, (2000, 2000, 3), dtype=np.uint8)
+        mask = np.ones((2000, 2000), bool)
+        start = time.perf_counter()
+        pixel_sort(image, mask, "brightness", True, 60, 200)
+        assert time.perf_counter() - start < 15.0
+
+
+class TestSeeded:
+    """Une séquence doit pouvoir se rejouer."""
+
+    def test_flips_are_reproducible(self, photo, patchy):
+        a = pixel_sort(photo, patchy, "brightness", True, 20, 60,
+                       np.random.default_rng(5))
+        b = pixel_sort(photo, patchy, "brightness", True, 20, 60,
+                       np.random.default_rng(5))
+        assert np.array_equal(a, b)
+
+    def test_flips_change_the_result(self, photo, patchy):
+        plain = pixel_sort(photo, patchy, "brightness", True, 20, 60)
+        flipped = pixel_sort(photo, patchy, "brightness", True, 20, 60,
+                             np.random.default_rng(5))
+        assert not np.array_equal(plain, flipped)
+
+    def test_channel_shift_follows_the_draw(self, photo):
+        a = shift_channels(photo, 8, random.Random(3))
+        b = shift_channels(photo, 8, random.Random(3))
+        assert np.array_equal(a, b)
+
+    def test_no_shift_is_a_no_op(self, photo):
+        assert np.array_equal(shift_channels(photo, 0, random.Random(1)), photo)
+
+
+class TestSequence:
+    @pytest.fixture
+    def sources(self):
+        def disc(colour):
+            image = np.zeros((300, 240, 3), np.uint8)
+            cv2.circle(image, (120, 150), 90, colour, -1)
+            return image
+        return [disc((30, 60, 220)), disc((220, 90, 40)), disc((60, 210, 90))]
+
+    def test_frame_count(self, sources):
+        recipe = Recipe(sources=("a", "b", "c"), seed=1)
+        motion = Motion(frames_per_transition=6)
+        frames = list(render_sequence(recipe, motion, 128, sources))
+        assert len(frames) == count_frames(recipe, motion) == 12
+
+    def test_frames_are_square_and_sized(self, sources):
+        recipe = Recipe(sources=("a", "b"), seed=1)
+        frames = list(render_sequence(recipe, Motion(frames_per_transition=4),
+                                      160, sources[:2]))
+        assert all(f.shape == frames[0].shape for f in frames)
+        assert frames[0].shape[2] == 3
+
+    def test_a_sequence_replays_identically(self, sources):
+        recipe = Recipe(sources=("a", "b"), seed=77)
+        motion = Motion(frames_per_transition=4)
+        first = list(render_sequence(recipe, motion, 128, sources[:2]))
+        again = list(render_sequence(recipe, motion, 128, sources[:2]))
+        assert all(np.array_equal(a, b) for a, b in zip(first, again))
+
+    def test_two_seeds_diverge(self, sources):
+        motion = Motion(frames_per_transition=4)
+        a = list(render_sequence(Recipe(sources=("a", "b"), seed=1), motion, 128, sources[:2]))
+        b = list(render_sequence(Recipe(sources=("a", "b"), seed=2), motion, 128, sources[:2]))
+        assert not all(np.array_equal(x, y) for x, y in zip(a, b))
+
+    def test_one_image_is_refused(self, sources):
+        with pytest.raises(ValueError):
+            list(render_sequence(Recipe(sources=("a",), seed=1), Motion(), 128, sources[:1]))
+
+    def test_the_sequence_actually_moves(self, sources):
+        """Une transition doit transformer, pas répéter la même image."""
+        frames = list(render_sequence(Recipe(sources=("a", "b"), seed=9),
+                                      Motion(frames_per_transition=8), 160, sources[:2]))
+        assert not np.array_equal(frames[0], frames[-1])
+
+
+class TestWriting:
+    def test_writes_a_playable_file(self, tmp_path):
+        frames = [np.full((64, 64, 3), v, np.uint8) for v in (20, 90, 160, 230)]
+        target = tmp_path / "essai.mp4"
+        assert write_video(iter(frames), target, fps=8) == 4
+        assert target.is_file() and target.stat().st_size > 0
+
+        back = cv2.VideoCapture(str(target))
+        assert back.isOpened()
+        assert int(back.get(cv2.CAP_PROP_FRAME_COUNT)) >= 3
+        back.release()
+
+    def test_empty_sequence_writes_nothing(self, tmp_path):
+        assert write_video(iter([]), tmp_path / "vide.mp4", fps=8) == 0
+
+
+class TestMasks:
+    def test_sequence_opens_and_closes(self):
+        field = np.linspace(0, 255, 64 * 64).reshape(64, 64).astype(np.uint8)
+        masks = mask_sequence(field, 5)
+        assert len(masks) == 5
+        assert masks[0].mean() > masks[-1].mean(), "le masque doit se refermer"
+
+
+class TestSingleFrame:
+    """Naviguer dans une séquence sans la rejouer depuis le début."""
+
+    @pytest.fixture
+    def sources(self):
+        def disc(colour):
+            image = np.zeros((300, 240, 3), np.uint8)
+            cv2.circle(image, (120, 150), 90, colour, -1)
+            return image
+        return [disc((30, 60, 220)), disc((220, 90, 40)), disc((60, 210, 90))]
+
+    def test_matches_the_full_sequence(self, sources):
+        from atelier.video import render_frame
+        recipe = Recipe(sources=("a", "b", "c"), seed=42)
+        motion = Motion(frames_per_transition=5)
+        whole = list(render_sequence(recipe, motion, 128, sources))
+        for index in (0, 3, 5, 9):
+            alone = render_frame(recipe, motion, 128, index, sources)
+            assert np.array_equal(alone, whole[index]), f"frame {index}"
+
+    def test_index_is_clamped(self, sources):
+        from atelier.video import render_frame
+        recipe = Recipe(sources=("a", "b"), seed=1)
+        motion = Motion(frames_per_transition=4)
+        assert render_frame(recipe, motion, 96, 999, sources[:2]).shape[0] > 0
+        assert render_frame(recipe, motion, 96, -5, sources[:2]).shape[0] > 0
+
+    def test_same_frame_at_two_sizes_keeps_the_moment(self, sources):
+        """Sortir une frame en grand, c'est tout l'intérêt."""
+        from atelier.video import render_frame
+        recipe = Recipe(sources=("a", "b"), seed=8)
+        motion = Motion(frames_per_transition=6)
+        small = render_frame(recipe, motion, 200, 3, sources[:2])
+        large = render_frame(recipe, motion, 600, 3, sources[:2])
+        assert (small.shape[0], large.shape[0]) == (200, 600), "la taille demandée est la taille rendue"
+        a = cv2.resize(small, (100, 100), interpolation=cv2.INTER_AREA).astype(float)
+        b = cv2.resize(large, (100, 100), interpolation=cv2.INTER_AREA).astype(float)
+        assert np.mean(np.abs(a - b)) < 40, "le même instant doit se reconnaître"

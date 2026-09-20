@@ -40,6 +40,13 @@ from atelier.engine import (
     render,
 )
 from atelier.metadata import read_recipe, save_with_recipe
+from atelier.video import (
+    Motion,
+    count_frames,
+    render_frame,
+    render_sequence,
+    write_video,
+)
 
 logger = logging.getLogger("atelier")
 
@@ -89,6 +96,40 @@ class Library:
             if path not in self._cache:
                 self._cache[path] = load_source(path)
             return self._cache[path]
+
+
+def motion_from_request(body: dict) -> Motion:
+    return Motion(
+        frames_per_transition=max(2, int(body.get("frames", 24))),
+        fps=max(1, int(body.get("fps", 24))),
+    )
+
+
+# Les tirages vidéo durent des minutes : ils partent en tâche de fond et
+# l'interface suit leur avancement, plutôt que de laisser le navigateur en
+# attente sur une requête qui n'aboutit pas.
+JOBS: dict[str, dict] = {}
+JOBS_LOCK = threading.Lock()
+
+
+def run_video_job(job_id: str, recipe, motion, size, images, target: Path):
+    total = count_frames(recipe, motion)
+
+    def frames():
+        for done, frame in enumerate(render_sequence(recipe, motion, size, images), 1):
+            with JOBS_LOCK:
+                JOBS[job_id]["done"] = done
+            yield frame
+
+    try:
+        written = write_video(frames(), target, motion.fps)
+        with JOBS_LOCK:
+            JOBS[job_id].update(state="fini", path=str(target), written=written)
+        logger.info("vidéo écrite : %s (%d frames)", target, written)
+    except Exception as exc:  # noqa: BLE001 — l'échec appartient au travail
+        logger.warning("vidéo échouée : %s", exc)
+        with JOBS_LOCK:
+            JOBS[job_id].update(state="échec", error=str(exc))
 
 
 def recipe_from_request(body: dict, library: Library) -> tuple[Recipe, list]:
@@ -168,6 +209,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._recipe_of(unquote(query.get("path", [""])[0]))
             if route.path == "/api/exports":
                 return self._exports()
+            if route.path == "/api/job":
+                return self._job(query.get("id", [""])[0])
             return self._static(route.path.lstrip("/"))
         except Exception as exc:  # noqa: BLE001 — une requête ne tue pas le serveur
             self._fail(exc)
@@ -179,6 +222,10 @@ class Handler(BaseHTTPRequestHandler):
                 return self._render()
             if route.path == "/api/export":
                 return self._export()
+            if route.path == "/api/frame":
+                return self._frame()
+            if route.path == "/api/video":
+                return self._video()
             self._json({"error": "route inconnue"}, 404)
         except Exception as exc:  # noqa: BLE001
             self._fail(exc)
@@ -275,6 +322,69 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Cache-Control", "no-store")
         self.end_headers()
         self.wfile.write(payload)
+
+    def _frame(self):
+        """Une frame de la séquence, à la taille voulue.
+
+        C'est ce qui remplace la capture d'écran : on parcourt, on s'arrête,
+        on sort l'instant en pleine définition.
+        """
+        body = self._body()
+        recipe, images = recipe_from_request(body, self.library)
+        motion = motion_from_request(body)
+        size = int(body.get("size") or PREVIEW)
+        index = int(body.get("frame", 0))
+
+        image = render_frame(recipe, motion, size, index, images)
+
+        if body.get("save"):
+            self.output_dir.mkdir(parents=True, exist_ok=True)
+            target = self.output_dir / f"atelier_{recipe.seed}_f{index}_{size}.jpg"
+            save_with_recipe(image, target, recipe, rendered_at=size, frame=index)
+            return self._json({
+                "path": str(target), "seed": recipe.seed, "frame": index,
+                "size": size, "centimetres": round(size / 300 * 2.54, 1),
+            })
+
+        payload = self._jpeg(image)
+        self.send_response(200)
+        self.send_header("Content-Type", "image/jpeg")
+        self.send_header("Content-Length", str(len(payload)))
+        self.send_header("X-Atelier-Seed", str(recipe.seed))
+        self.send_header("X-Atelier-Frames", str(count_frames(recipe, motion)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(payload)
+
+    def _video(self):
+        import uuid
+
+        body = self._body()
+        recipe, images = recipe_from_request(body, self.library)
+        if len(images) < 2:
+            raise ValueError("il faut au moins deux images pour une vidéo")
+        motion = motion_from_request(body)
+        size = int(body.get("size", 2000))
+
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+        target = self.output_dir / f"atelier_{recipe.seed}_{size}.mp4"
+        job_id = uuid.uuid4().hex[:12]
+        with JOBS_LOCK:
+            JOBS[job_id] = {"state": "en cours", "done": 0,
+                            "total": count_frames(recipe, motion)}
+
+        threading.Thread(
+            target=run_video_job,
+            args=(job_id, recipe, motion, size, images, target),
+            daemon=True,
+        ).start()
+        self._json({"job": job_id, "total": count_frames(recipe, motion),
+                    "seed": recipe.seed})
+
+    def _job(self, job_id: str):
+        with JOBS_LOCK:
+            state = JOBS.get(job_id)
+        self._json(state or {"state": "inconnu"})
 
     def _export(self):
         body = self._body()

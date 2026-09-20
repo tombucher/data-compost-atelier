@@ -69,6 +69,13 @@
     font-variant-numeric: tabular-nums;
   }
 
+  .modes { display: flex; gap: 4px; margin-bottom: 18px; }
+  .mode {
+    flex: 1; padding: 7px; font-size: 12px;
+    background: #1f1f1b; border: 1px solid var(--bord);
+  }
+  .mode.actif { background: var(--accent); color: #17170f; border-color: var(--accent); font-weight: 600; }
+
   .tirage {
     padding: 6px 8px; margin-bottom: 4px; border-radius: 4px;
     border: 1px solid var(--bord); cursor: pointer; font-size: 11px;
@@ -148,6 +155,11 @@
 </main>
 
 <aside>
+  <div class="modes">
+    <button class="mode actif" data-mode="image">Image</button>
+    <button class="mode" data-mode="video">Vidéo</button>
+  </div>
+
   <h2>Matières</h2>
   <div id="effets"></div>
 
@@ -163,6 +175,19 @@
   <div class="effet">
     <div class="ligne"><label for="bords">Contours seuls</label><span class="valeur" id="v-bords"></span></div>
     <input type="range" id="bords" min="0" max="15" step="1" value="0">
+  </div>
+
+  <div id="bloc-video" hidden>
+    <h2>Mouvement</h2>
+    <div class="effet">
+      <div class="ligne"><label for="frames">Images par transition</label><span class="valeur" id="v-frames"></span></div>
+      <input type="range" id="frames" min="6" max="60" step="2" value="24">
+    </div>
+    <div class="effet">
+      <div class="ligne"><label for="position">Position</label><span class="valeur" id="v-position"></span></div>
+      <input type="range" id="position" min="0" max="23" step="1" value="0">
+      <div class="note">Parcourez la séquence et arrêtez-vous sur l'instant voulu. Il se tire en pleine définition, sans capture d'écran.</div>
+    </div>
   </div>
 
   <h2>Tirage</h2>
@@ -187,6 +212,9 @@
     <button class="principal" id="exporter" style="flex:1">Tirer</button>
     <select id="format" style="width:auto"><option value="jpg">JPEG</option><option value="png">PNG</option></select>
   </div>
+  <div class="rangee" id="bloc-bouton-video" hidden style="margin-top:6px">
+    <button id="tirer-video" style="flex:1">Tirer la séquence</button>
+  </div>
   <div class="note" id="resultat"></div>
 
   <h2>Fidélité</h2>
@@ -206,6 +234,7 @@ const EFFETS = [
 ];
 
 const etat = {
+  mode: 'image', totalFrames: 0,
   disponibles: [], choisies: [],
   effets: Object.fromEntries(EFFETS.map(e => [e.cle, { actif:false, force:e.defaut }])),
 };
@@ -337,6 +366,8 @@ function corps(extra = {}) {
     smoothness: parseFloat($('#lissage').value),
     edge_blur: parseInt($('#bords').value),
     overflow: $('#debordement').checked,
+    frames: parseInt($('#frames').value),
+    fps: 24,
     ...extra,
   };
 }
@@ -357,11 +388,22 @@ async function rendre() {
 
   const depart = performance.now();
   try {
-    const r = await fetch('/api/render', {
+    const enVideo = etat.mode === 'video';
+    const r = await fetch(enVideo ? '/api/frame' : '/api/render', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(corps()),
+      body: JSON.stringify(enVideo ? corps({ frame: parseInt($('#position').value) }) : corps()),
     });
     if (!r.ok) throw new Error((await r.json()).error || 'échec du rendu');
+
+    const total = parseInt(r.headers.get('X-Atelier-Frames') || '0');
+    if (enVideo && total && total !== etat.totalFrames) {
+      // Le curseur de position doit couvrir la séquence entière
+      etat.totalFrames = total;
+      const curseur = $('#position');
+      curseur.max = total - 1;
+      if (parseInt(curseur.value) > total - 1) curseur.value = total - 1;
+      $('#v-position').textContent = `${parseInt(curseur.value) + 1} / ${total}`;
+    }
 
     const graine = r.headers.get('X-Atelier-Seed');
     if (graine && !$('#graine').value) $('#graine').value = graine;
@@ -371,9 +413,11 @@ async function rendre() {
     if (vue.src) URL.revokeObjectURL(vue.src);
     vue.src = image; vue.hidden = false; $('#vide').hidden = true;
 
+    const position = etat.mode === 'video' && etat.totalFrames
+      ? ` · image ${parseInt($('#position').value) + 1}/${etat.totalFrames}` : '';
     $('#etat').textContent =
       `${etat.choisies.length} image${etat.choisies.length > 1 ? 's' : ''} · `
-      + `graine ${graine} · ${Math.round(performance.now() - depart)} ms`;
+      + `graine ${graine}${position} · ${Math.round(performance.now() - depart)} ms`;
   } catch (e) {
     $('#etat').textContent = e.message;
   } finally {
@@ -393,9 +437,12 @@ async function exporter() {
   $('#resultat').className = 'note';
 
   try {
-    const r = await fetch('/api/export', {
+    const enVideo = etat.mode === 'video';
+    const r = await fetch(enVideo ? '/api/frame' : '/api/export', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(corps({ size: taille, format: $('#format').value })),
+      body: JSON.stringify(enVideo
+        ? corps({ size: taille, frame: parseInt($('#position').value), save: true })
+        : corps({ size: taille, format: $('#format').value })),
     });
     const d = await r.json();
     if (!r.ok) throw new Error(d.error);
@@ -410,6 +457,55 @@ async function exporter() {
   }
 }
 
+async function tirerVideo() {
+  if (etat.choisies.length < 2) {
+    $('#resultat').className = 'note';
+    $('#resultat').textContent = 'Il faut au moins deux images pour une séquence.';
+    return;
+  }
+  const bouton = $('#tirer-video'), taille = parseInt($('#taille').value);
+  bouton.disabled = true;
+  $('#resultat').className = 'note';
+
+  try {
+    const lance = await (await fetch('/api/video', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(corps({ size: taille })),
+    })).json();
+    if (lance.error) throw new Error(lance.error);
+
+    // Le calcul dure des minutes : on suit son avancement
+    while (true) {
+      await new Promise(r => setTimeout(r, 1000));
+      const etatTravail = await (await fetch('/api/job?id=' + lance.job)).json();
+      if (etatTravail.state === 'fini') {
+        $('#resultat').className = 'note reussite';
+        $('#resultat').textContent = `${etatTravail.written} images → ${etatTravail.path}`;
+        break;
+      }
+      if (etatTravail.state === 'échec') throw new Error(etatTravail.error);
+      const part = Math.round(100 * (etatTravail.done || 0) / (etatTravail.total || 1));
+      bouton.textContent = `${part} %`;
+      $('#resultat').textContent = `${etatTravail.done} / ${etatTravail.total} images`;
+    }
+  } catch (e) {
+    $('#resultat').textContent = e.message;
+  } finally {
+    bouton.disabled = false;
+    bouton.textContent = 'Tirer la séquence';
+  }
+}
+
+function basculer(mode) {
+  etat.mode = mode;
+  document.querySelectorAll('.mode').forEach(b =>
+    b.classList.toggle('actif', b.dataset.mode === mode));
+  $('#bloc-video').hidden = mode !== 'video';
+  $('#bloc-bouton-video').hidden = mode !== 'video';
+  $('#exporter').textContent = mode === 'video' ? 'Tirer cette image' : 'Tirer';
+  rendre();
+}
+
 // --- branchements -----------------------------------------------------------
 ['seuil', 'lissage', 'bords'].forEach(id => {
   const el = $('#' + id);
@@ -422,6 +518,19 @@ $('#graine').onchange = demanderRendu;
 $('#relancer').onclick = () => { $('#graine').value = ''; rendre(); };
 $('#taille').onchange = () => EFFETS.forEach(afficherValeur);
 $('#exporter').onclick = exporter;
+$('#tirer-video').onclick = tirerVideo;
+document.querySelectorAll('.mode').forEach(b => b.onclick = () => basculer(b.dataset.mode));
+$('#frames').oninput = () => {
+  $('#v-frames').textContent = $('#frames').value;
+  etat.totalFrames = 0;   // la séquence change de longueur
+  demanderRendu();
+};
+$('#position').oninput = () => {
+  $('#v-position').textContent =
+    `${parseInt($('#position').value) + 1} / ${etat.totalFrames || '?'}`;
+  demanderRendu();
+};
+$('#v-frames').textContent = $('#frames').value;
 
 batirEffets();
 chargerSources();

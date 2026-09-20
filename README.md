@@ -93,13 +93,46 @@ différents pour la trame, identique à l'octet près pour la saturation. Le
 reste vérifie qu'une graine donne la même composition à toutes les tailles, et
 que la recette survit à l'aller-retour dans l'image.
 
+## La voie vidéo
+
+Bascule **Vidéo** en haut à droite. Les mêmes images et les mêmes matières,
+plus une transition : la première image se décompose par seuils de saillance
+pendant que la suivante se révèle dessous, avec un tri de pixels par segments.
+
+Le curseur **Position** parcourt la séquence. Chaque image se calcule seule,
+sans rejouer ce qui précède — on s'arrête sur l'instant voulu et **Tirer cette
+image** le sort à la taille choisie.
+
+C'est ce qui remplace la capture d'écran. Les 116 images de
+`export-vid_sauv/SCREENSHOT` font 2254 px alors que leurs vidéos sources en
+contenaient 3016 : la capture perdait un quart de la définition. Ici l'instant
+sort à 4000 ou 8000 px.
+
+**Tirer la séquence** écrit un mp4. Le calcul dure des minutes en grand
+format, il tourne en tâche de fond et l'avancement s'affiche.
+
+### Le canal rouge n'est jamais trié
+
+Dans le traitement par canal de l'original, chaque canal est répliqué en gris
+avant d'être trié. Or trier un gris par teinte ou par saturation ne change
+rien : ces valeurs y sont toutes nulles. Comme le canal rouge ne tirait
+qu'entre « saturation » et « teinte », il n'était jamais trié — et le vert et
+le bleu une fois sur deux.
+
+Cette asymétrie est ce qui sépare les couleurs et fait la signature de
+l'effet. Elle est conservée, comme le débordement de saturation.
+
 ## Limites connues
 
 - Quand la cellule de trame ne divise pas la toile, la dernière cellule
   partielle peut rester sombre : son point est centré dans la cellule
   complétée, dont le centre peut tomber hors de l'image. Borné à une cellule.
-- La voie vidéo (`datamoshing4.py`, qui a produit les 116 captures) n'est pas
-  encore reprise ici.
+- Le tri de pixels n'est vectorisé qu'à hauteur de ×1,8 : l'essentiel du
+  travail était déjà dans numpy chez l'original, seule la détection des
+  segments était en Python. Une séquence de 150 images en 3000 px demande
+  environ cinq minutes.
+- L'interface n'a été éprouvée que sur sept images sources. La colonne de
+  vignettes n'a pas été essayée sur un dossier fourni.
 
 ## Pourquoi un dépôt séparé
 
