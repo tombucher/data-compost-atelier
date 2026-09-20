@@ -30,15 +30,27 @@ MARKER = "data-compost-atelier"
 EXIF_IMAGE_DESCRIPTION = 0x010E
 
 
+def _effect_json(effect: Effect) -> dict:
+    """La forme n'est écrite que si elle sort de l'ordinaire : les images
+    d'avant les formes de trame restent relisibles à l'identique."""
+    payload = {"name": effect.name, "strength": effect.strength}
+    if effect.shape != "round":
+        payload["shape"] = effect.shape
+    return payload
+
+
+def _effect_from(raw: dict) -> Effect:
+    return Effect(raw["name"], float(raw["strength"]), raw.get("shape", "round"))
+
+
 def recipe_to_json(recipe: Recipe, **extra) -> str:
     payload = {
         "version": 1,
         "seed": recipe.seed,
         "sources": [Path(s).name for s in recipe.sources],
-        "effects": [{"name": e.name, "strength": e.strength} for e in recipe.effects],
+        "effects": [_effect_json(e) for e in recipe.effects],
         "per_image": [
-            None if group is None
-            else [{"name": e.name, "strength": e.strength} for e in group]
+            None if group is None else [_effect_json(e) for e in group]
             for group in recipe.per_image
         ],
         "saliency_threshold": recipe.saliency_threshold,
@@ -61,12 +73,9 @@ def recipe_from_json(raw: str, sources=None) -> Recipe:
     return Recipe(
         sources=tuple(sources if sources is not None else data.get("sources", ())),
         seed=int(data["seed"]),
-        effects=tuple(
-            Effect(e["name"], float(e["strength"])) for e in data.get("effects", ())
-        ),
+        effects=tuple(_effect_from(e) for e in data.get("effects", ())),
         per_image=tuple(
-            None if group is None
-            else tuple(Effect(e["name"], float(e["strength"])) for e in group)
+            None if group is None else tuple(_effect_from(e) for e in group)
             for group in data.get("per_image", ())
         ),
         saliency_threshold=int(data.get("saliency_threshold", 60)),

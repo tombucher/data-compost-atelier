@@ -98,31 +98,43 @@ PROFILES = {
     },
 }
 
-# Les deux matières venues de la voie vidéo n'existaient pas en 2024 : elles
+# Les trois matières venues du datamoshing n'existaient pas en 2024 : elles
 # apparaissent rarement, pour ouvrir sans dénaturer.
-NEWCOMERS = ((0.12, "pixelsort", 0.02, 0.08), (0.10, "shift", 0.004, 0.015))
+NEWCOMERS = ((0.12, "pixelsort", 0.02, 0.08), (0.10, "shift", 0.004, 0.015),
+             (0.10, "mosh", 0.015, 0.06))
+
+# Les 230 œuvres n'ont que de la trame ronde : l'original ne savait pas en
+# faire d'autre. Le tirage la garde très majoritaire, et laisse passer une
+# autre forme une fois sur cinq — une ouverture, pas un changement d'habitude.
+SHAPES = ("round", "square", "diamond", "line", "cross", "ellipse", "euclidean")
+SHAPE_WEIGHTS = (80.0, 3.0, 3.0, 3.0, 3.0, 4.0, 4.0)
 
 SOURCES_RANGE = (2, 4)
 
 
 def draw_effects(family: str, rng: random.Random) -> tuple[Effect, ...]:
     """Les matières d'une famille : la dominante, et parfois sa compagne."""
+    def matiere(name: str, low: float, high: float) -> Effect:
+        shape = (rng.choices(SHAPES, weights=SHAPE_WEIGHTS, k=1)[0]
+                 if name == "halftone" else "round")
+        return Effect(name, rng.uniform(low, high), shape)
+
     profile = PROFILES[family]
-    name, low, high = profile["always"]
-    effects = [Effect(name, rng.uniform(low, high))]
+    effects = [matiere(*profile["always"])]
 
     chance, companion, c_low, c_high = profile["sometimes"]
     if rng.random() < chance:
-        effects.append(Effect(companion, rng.uniform(c_low, c_high)))
+        effects.append(matiere(companion, c_low, c_high))
 
     for chance, name, low, high in NEWCOMERS:
         if rng.random() < chance:
-            effects.append(Effect(name, rng.uniform(low, high)))
+            effects.append(matiere(name, low, high))
 
     # L'ordre compte : la trame écrase ce qui la précède, on la garde en
     # dernier pour que la pixellisation reste lisible dessous.
     order = {n: i for i, n in enumerate(
-        ("saturate", "pixelate", "pixelsort", "shift", "bitmap", "halftone"))}
+        ("saturate", "pixelate", "pixelsort", "mosh", "shift", "bitmap",
+         "halftone"))}
     effects.sort(key=lambda e: order.get(e.name, 99))
     return tuple(effects)
 

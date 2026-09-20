@@ -86,9 +86,13 @@ le sujet reste net et se sature, le fond se décompose.
 | Pixellisation | Blocs de couleur moyenne |
 | Bitmap | Bascule en noir et blanc, mélangée à l'original |
 | Saturation | Rehausse les couleurs du sujet |
-| Trame | Points de taille variable, façon similigravure |
-| Tri de pixels | Réordonne les pixels par bandes, venu de la voie vidéo |
-| Décalage RVB | Sépare les canaux de couleur, venu de la voie vidéo |
+| Trame | Points de taille variable, façon similigravure. Sept formes, voir plus bas |
+| Tri de pixels | Réordonne les pixels par bandes |
+| Datamoshing | Trie chaque canal séparément : c'est lui qui sépare les couleurs |
+| Décalage RVB | Décale le rouge et le bleu en sens opposés |
+
+Les trois dernières viennent du datamoshing et ne vivaient que dans le temps.
+Elles se posent aussi sur une image arrêtée, à l'instant 0 de l'axe.
 
 Les forces marquées d'un grain — pixellisation, trame, tri, décalage — sont
 exprimées en fraction de la toile, pas en pixels : elles gardent la même
@@ -100,6 +104,33 @@ matières, de la zone la plus calme à la plus saillante. C'est un percentile :
 à 60, les 60 % les moins saillants se décomposent. Exprimé en valeur brute de
 saillance, comme au début, la moitié haute du curseur ne servait à rien — les
 cartes de saillance sont très concentrées vers le bas.
+
+### Les formes de trame
+
+Sept formes, les six de Photoshop plus l'euclidienne du PostScript. Le menu
+apparaît sous le curseur de trame quand elle est active.
+
+| Forme | Ce qu'elle donne |
+|---|---|
+| Ronde | Le point d'offset. C'est la trame de l'original et celle des 230 œuvres |
+| Carrée | Dure, franche, proche de la sérigraphie |
+| Losange | Les points se rejoignent en diagonale |
+| Ligne | Des bandes horizontales d'épaisseur variable, façon gravure |
+| Croix | Une croix qui grossit jusqu'à fermer la cellule |
+| Ellipse | Aplatie : les points se chaînent horizontalement avant de se rejoindre en hauteur, ce qui adoucit les dégradés |
+| Euclidienne | Ronde, puis carrée à mi-densité, puis ronde en creux. C'est la fonction de spot du PostScript, qui évite le saut de tonalité à 50 % |
+
+**La ronde rend plus clair que les autres, au même réglage.** Ce n'est pas un
+défaut d'affichage. L'original calculait le rayon du point proportionnellement
+à la densité, si bien que sa surface — donc son noir — croît comme le *carré*
+de la densité : à mi-densité il ne couvre que 20 % de la cellule au lieu de
+50 %. Les six formes ajoutées suivent la densité linéairement, comme doit le
+faire une fonction de spot. Corriger la ronde changerait les 230 œuvres ;
+elle garde donc son calcul, et l'écart est assumé.
+
+Sous cinq ou six pixels de cellule, les formes cessent de se distinguer :
+neuf pixels ne suffisent pas à séparer un carré d'un losange. Un grain très
+fin annule donc le choix de la forme.
 
 ### Au hasard
 
@@ -115,6 +146,10 @@ Deux réglages viennent directement des chiffres : le bitmap ne descend pas
 sous 0,85, sinon le seuillage reste mêlé à l'image et le noir et blanc francs
 n'apparaît pas ; et le débordement de saturation, qui ne concerne que 16
 œuvres sur 230, ne se tire qu'une fois sur sept.
+
+Les 230 œuvres n'ont que de la trame ronde — l'original ne savait pas en
+faire d'autre. Le tirage la garde donc très majoritaire et ne laisse passer
+une autre forme qu'une fois sur cinq.
 
 Ce qui reste en écart et pourquoi, c'est écrit dans `atelier/chance.py`.
 

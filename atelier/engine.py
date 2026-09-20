@@ -40,7 +40,8 @@ PREVIEW_SIZE = 1024
 
 # Les quatre matières de blending-image2.py, plus les deux venues de la voie
 # vidéo : rien n'obligeait à les tenir séparées.
-EFFECTS = ("pixelate", "bitmap", "saturate", "halftone", "pixelsort", "shift")
+EFFECTS = ("pixelate", "bitmap", "saturate", "halftone", "pixelsort", "shift",
+           "mosh")
 
 
 @dataclass(frozen=True)
@@ -54,6 +55,8 @@ class Effect:
 
     name: str
     strength: float
+    # La forme du point de trame. Sans effet pour les autres matières.
+    shape: str = "round"
 
     def pixels(self, canvas: int, minimum: int = 2) -> int:
         """Convertit la force en pixels pour une toile donnée."""
@@ -193,15 +196,93 @@ def apply_saturate(
     return cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
 
 
-def apply_halftone(image: np.ndarray, mask: np.ndarray, cell: int) -> np.ndarray:
-    """Trame de points, vectorisée.
+# Les six formes de trame de Photoshop, plus l'euclidienne, qui est la
+# fonction de spot classique du PostScript.
+HALFTONE_SHAPES = ("round", "square", "diamond", "line", "cross", "ellipse",
+                   "euclidean")
+
+
+def spot_field(cell: int, shape: str) -> np.ndarray:
+    """Le champ d'une cellule de trame : 0 au centre, `cell/2` au bord.
+
+    Une trame se ramène à un champ et à un seuil : on noircit là où le champ
+    est sous le seuil, et le seuil suit la densité de la cellule. Changer de
+    forme, c'est changer de champ — la mécanique reste la même.
+
+    Seul l'ordre des valeurs compte : `rank_field` en tire la fraction de
+    cellule à noircir, si bien qu'une forme n'a pas besoin d'être mise à
+    l'échelle d'une autre.
+    """
+    axis = (np.arange(cell) - cell // 2).astype(np.float32)
+    # Grille pleine : une forme qui n'utilise qu'un axe, comme la ligne,
+    # doit quand même renvoyer une cellule carrée.
+    x, y = np.meshgrid(axis, axis)
+    half = max(1.0, cell / 2.0)
+
+    if shape == "square":
+        return np.maximum(np.abs(x), np.abs(y))
+    if shape == "diamond":
+        return np.abs(x) + np.abs(y)
+    if shape == "line":
+        return np.abs(y)
+    if shape == "cross":
+        # Sans le +1, le champ vaudrait 0 sur les deux axes médians et une
+        # croix d'un pixel resterait visible dans les zones les plus claires.
+        return np.minimum(np.abs(x), np.abs(y)) + 1.0
+    if shape == "ellipse":
+        # Aplatie : les points se rejoignent horizontalement avant de se
+        # rejoindre verticalement, ce qui adoucit les dégradés.
+        return np.sqrt((x * 0.75) ** 2 + (y * 1.33) ** 2)
+    if shape == "euclidean":
+        # Fonction de spot du PostScript. Le point est rond, devient carré à
+        # mi-densité puis se creuse en rond inversé : la couverture suit le
+        # niveau sans le saut de tonalité que produit un disque à 50 %.
+        u, v = np.pi * x / half, np.pi * y / half
+        return (2.0 - np.cos(u) - np.cos(v)) / 4.0 * half
+    return np.sqrt(x ** 2 + y ** 2)
+
+
+def rank_field(cell: int, shape: str) -> np.ndarray:
+    """Le champ ramené à un rang dans [0, 1] : la fonction de spot.
+
+    Chaque pixel de la cellule reçoit la fraction de pixels que la forme
+    noircit avant lui. Noircir là où le rang est sous la densité couvre donc
+    exactement cette densité, quelle que soit la forme — sans quoi un losange
+    rendrait l'image trois fois plus sombre qu'un rond au même réglage.
+    """
+    field = spot_field(cell, shape)
+
+    # Départage symétrique. Une forme à arêtes — carré, ligne, croix — a
+    # beaucoup de pixels à valeur égale ; sans départage, `argsort` les
+    # prendrait dans l'ordre de la mémoire et une cellule à demi remplie
+    # monterait en escalier d'un seul côté. La distance au centre, pondérée
+    # assez faiblement pour ne jamais franchir un écart du champ lui-même,
+    # fait grandir la forme depuis son centre.
+    axis = (np.arange(cell) - cell // 2).astype(np.float32)
+    x, y = np.meshgrid(axis, axis)
+    field = field + np.sqrt(x ** 2 + y ** 2) / (2.0 * max(1, cell))
+
+    order = np.argsort(field, axis=None, kind="stable")
+    rank = np.empty(field.size, dtype=np.float32)
+    rank[order] = np.arange(field.size, dtype=np.float32) / max(1, field.size - 1)
+    return rank.reshape(field.shape)
+
+
+def apply_halftone(image: np.ndarray, mask: np.ndarray, cell: int,
+                   shape: str = "round") -> np.ndarray:
+    """Trame, vectorisée.
 
     L'original parcourait l'image en deux boucles Python avec un cv2.circle par
     cellule : tenable à 1024 px, environ 500 000 itérations à 6000 px. Ici
     tout se calcule en une passe numpy, ce qui rend le grand format possible.
+
+    `shape` choisit la forme du point ; « round » reproduit l'original.
     """
     height, width = image.shape[:2]
     cell = max(2, int(cell))
+    # Une forme inconnue — recette abîmée, nom mal orthographié — retombe sur
+    # le rond, et sur son calcul d'origine, pas sur une approximation.
+    shape = shape if shape in HALFTONE_SHAPES else "round"
 
     grey = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
@@ -215,17 +296,24 @@ def apply_halftone(image: np.ndarray, mask: np.ndarray, cell: int) -> np.ndarray
     # Moyenne par cellule
     means = padded.reshape(rows, cell, cols, cell).mean(axis=(1, 3))
 
-    # Rayon du point : une cellule sombre donne un gros point. Tronqué à
-    # l'entier et centré sur cell//2 comme le faisait le cv2.circle d'origine,
-    # pour que la trame garde exactement le même grain.
-    radius = ((255.0 - means) / 255.0 * (cell / 2.0)).astype(np.int32)
+    level = (255.0 - means) / 255.0
 
-    # Distance au centre de la cellule, identique pour toutes
-    axis = np.arange(cell) - cell // 2
-    distance = np.sqrt(axis[:, None] ** 2 + axis[None, :] ** 2)
+    if shape == "round":
+        # Chemin d'origine, conservé tel quel : le rayon est tronqué à
+        # l'entier et centré sur cell//2 comme le faisait le cv2.circle de
+        # `blending-image2`, pour que la trame garde exactement son grain. Sa
+        # couverture croît comme le carré de la densité, pas linéairement —
+        # c'est un écart à la théorie, mais c'est ce qui fait les 230 œuvres.
+        seuil = (level * (cell / 2.0)).astype(np.int32)
+        champ = spot_field(cell, shape)
+    else:
+        # Les formes ajoutées suivent la densité linéairement, comme une
+        # fonction de spot doit le faire.
+        seuil = level.astype(np.float32)
+        champ = rank_field(cell, shape)
 
     # Un point par cellule, par diffusion : (rows, 1, cols, 1) contre (cell, cell)
-    inside = distance[None, :, None, :] <= radius[:, None, :, None]
+    inside = champ[None, :, None, :] <= seuil[:, None, :, None]
     dots = np.where(inside, 255, 0).astype(np.uint8)
     dots = dots.reshape(rows * cell, cols * cell)[:height, :width]
 
@@ -262,7 +350,8 @@ def apply_effects(
                 result, ~quiet, effect.strength, recipe.saturation_overflow
             )
         elif effect.name == "halftone":
-            result = apply_halftone(result, quiet, effect.pixels(canvas))
+            result = apply_halftone(result, quiet, effect.pixels(canvas),
+                                    effect.shape)
         elif effect.name == "pixelsort":
             # Importé ici : video importe engine, l'inverse au chargement
             # ferait un cycle.
@@ -276,6 +365,19 @@ def apply_effects(
             result = shift_channels(
                 result, effect.pixels(canvas, minimum=1),
                 random.Random(f"{recipe.seed}:shift"),
+            )
+        elif effect.name == "mosh":
+            # Le tri canal par canal : c'est lui qui sépare les couleurs, et
+            # il n'existait jusqu'ici que dans l'axe du temps. Il se pose
+            # aussi sur une image arrêtée.
+            from atelier.video import sort_channels_separately
+
+            low = effect.pixels(canvas, minimum=4)
+            result = sort_channels_separately(
+                result, quiet, False, canvas,
+                random.Random(f"{recipe.seed}:mosh"),
+                np.random.default_rng(recipe.seed),
+                True, low, low * 4,
             )
 
     return result

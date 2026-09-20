@@ -210,18 +210,16 @@ def recipe_from_request(body: dict, library: Library) -> tuple[Recipe, list]:
     if not paths:
         raise ValueError("aucune image choisie")
 
-    effects = tuple(
-        Effect(e["name"], float(e["strength"]))
-        for e in body.get("effects", [])
-        if e.get("name")
-    )
+    def matiere(e) -> Effect:
+        return Effect(e["name"], float(e["strength"]), e.get("shape", "round"))
+
+    effects = tuple(matiere(e) for e in body.get("effects", []) if e.get("name"))
+
     def group(raw):
         """Un réglage propre à une image, ou None pour suivre le commun."""
         if raw is None:
             return None
-        return tuple(
-            Effect(e["name"], float(e["strength"])) for e in raw if e.get("name")
-        )
+        return tuple(matiere(e) for e in raw if e.get("name"))
 
     recipe = Recipe(
         sources=tuple(paths),
@@ -239,6 +237,10 @@ def recipe_from_request(body: dict, library: Library) -> tuple[Recipe, list]:
 AXE_KEYS = tuple(decay_payload(Decay())) + ("moment",)
 
 
+def _matiere_json(effect: Effect) -> dict:
+    return {"name": effect.name, "strength": effect.strength, "shape": effect.shape}
+
+
 def recipe_payload(recipe, sources=None, extra: dict | None = None) -> dict:
     """La recette telle que l'interface l'attend, axe compris."""
     axe = {k: extra[k] for k in AXE_KEYS if extra and k in extra}
@@ -246,10 +248,9 @@ def recipe_payload(recipe, sources=None, extra: dict | None = None) -> dict:
         **axe,
         "sources": list(recipe.sources if sources is None else sources),
         "seed": recipe.seed,
-        "effects": [{"name": e.name, "strength": e.strength} for e in recipe.effects],
+        "effects": [_matiere_json(e) for e in recipe.effects],
         "per_image": [
-            None if g is None
-            else [{"name": e.name, "strength": e.strength} for e in g]
+            None if g is None else [_matiere_json(e) for e in g]
             for g in recipe.per_image
         ],
         "threshold": recipe.saliency_threshold,

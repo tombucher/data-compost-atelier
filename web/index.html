@@ -310,11 +310,20 @@ const EFFETS = [
   { cle:'saturate', nom:'Saturation',    min:1,     max:4,    pas:0.05,  defaut:2.00,  unite:'×' },
   { cle:'halftone', nom:'Trame',         min:0.003, max:0.04, pas:0.001, defaut:0.010, enPixels:true },
   { cle:'pixelsort',nom:'Tri de pixels', min:0.005, max:0.15, pas:0.005, defaut:0.040, enPixels:true },
+  { cle:'mosh',     nom:'Datamoshing',   min:0.005, max:0.15, pas:0.005, defaut:0.030, enPixels:true },
   { cle:'shift',    nom:'Décalage RVB',  min:0.001, max:0.04, pas:0.001, defaut:0.008, enPixels:true },
 ];
 
+// Les six formes de trame de Photoshop, plus l'euclidienne du PostScript.
+const FORMES = [
+  ['round', 'ronde'], ['square', 'carrée'], ['diamond', 'losange'],
+  ['line', 'ligne'], ['cross', 'croix'], ['ellipse', 'ellipse'],
+  ['euclidean', 'euclidienne'],
+];
+
 function reglagesNeufs() {
-  return Object.fromEntries(EFFETS.map(e => [e.cle, { actif:false, force:e.defaut }]));
+  return Object.fromEntries(EFFETS.map(
+    e => [e.cle, { actif:false, force:e.defaut, forme:'round' }]));
 }
 
 // Les réglages de l'axe, tels que le serveur les attend. Curseurs et cases
@@ -354,6 +363,9 @@ function batirEffets() {
         <span class="valeur" id="v-${e.cle}"></span>
       </div>
       <input type="range" id="f-${e.cle}" min="${e.min}" max="${e.max}" step="${e.pas}" value="${e.defaut}" disabled>
+      ${e.cle === 'halftone' ? `<select id="forme-halftone" style="margin-top:6px" disabled>`
+        + FORMES.map(([cle, nom]) => `<option value="${cle}">trame ${nom}</option>`).join('')
+        + `</select>` : ''}
     </div>`).join('');
 
   EFFETS.forEach(e => {
@@ -362,6 +374,7 @@ function batirEffets() {
       reglagesCourants()[e.cle].actif = bascule.checked;
       curseur.disabled = !bascule.checked;
       afficherValeur(e); peindreChoix(); demanderRendu();
+      if (e.cle === 'halftone') $('#forme-halftone').disabled = !bascule.checked;
     };
     curseur.oninput = () => {
       reglagesCourants()[e.cle].force = parseFloat(curseur.value);
@@ -369,6 +382,11 @@ function batirEffets() {
     };
     afficherValeur(e);
   });
+
+  $('#forme-halftone').onchange = () => {
+    reglagesCourants().halftone.forme = $('#forme-halftone').value;
+    demanderRendu();
+  };
 }
 
 function afficherValeur(e) {
@@ -471,6 +489,8 @@ function peindreEffets() {
     $(`#f-${e.cle}`).disabled = !reglages[e.cle].actif;
     afficherValeur(e);
   });
+  $('#forme-halftone').value = reglages.halftone.forme || 'round';
+  $('#forme-halftone').disabled = !reglages.halftone.actif;
   $('#note-cible').textContent = etat.cible
     ? "Ces matières ne s'appliquent qu'à cette image."
     : "Ces matières s'appliquent aux images sans réglage propre.";
@@ -508,10 +528,11 @@ function appliquer(r) {
   });
 
   const versReglages = liste => {
-    const actifs = Object.fromEntries((liste || []).map(e => [e.name, e.strength]));
+    const actifs = Object.fromEntries((liste || []).map(e => [e.name, e]));
     return Object.fromEntries(EFFETS.map(e => [e.cle, {
       actif: actifs[e.cle] !== undefined,
-      force: actifs[e.cle] ?? e.defaut,
+      force: actifs[e.cle]?.strength ?? e.defaut,
+      forme: actifs[e.cle]?.shape ?? 'round',
     }]));
   };
   etat.effets = versReglages(r.effects);
@@ -534,8 +555,10 @@ function appliquer(r) {
 
 // --- rendu ------------------------------------------------------------------
 function enListe(reglages) {
-  return EFFETS.filter(e => reglages[e.cle].actif)
-               .map(e => ({ name: e.cle, strength: reglages[e.cle].force }));
+  return EFFETS.filter(e => reglages[e.cle].actif).map(e => ({
+    name: e.cle, strength: reglages[e.cle].force,
+    shape: reglages[e.cle].forme || 'round',
+  }));
 }
 
 function corps(extra = {}) {
