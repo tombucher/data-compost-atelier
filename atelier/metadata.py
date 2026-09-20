@@ -54,6 +54,9 @@ def recipe_to_json(recipe: Recipe, **extra) -> str:
             for group in recipe.per_image
         ],
         "saliency_threshold": recipe.saliency_threshold,
+        "bleed": recipe.bleed,
+        "angle": recipe.angle,
+        "full_frame": recipe.full_frame,
         "smoothness": recipe.smoothness,
         "edge_blur": recipe.edge_blur,
         "saturation_overflow": recipe.saturation_overflow,
@@ -79,6 +82,9 @@ def recipe_from_json(raw: str, sources=None) -> Recipe:
             for group in data.get("per_image", ())
         ),
         saliency_threshold=int(data.get("saliency_threshold", 60)),
+        bleed=float(data.get("bleed", 0.0)),
+        angle=float(data.get("angle", 0.0)),
+        full_frame=bool(data.get("full_frame", False)),
         smoothness=float(data.get("smoothness", 3.0)),
         edge_blur=int(data.get("edge_blur", 0)),
         saturation_overflow=bool(data.get("saturation_overflow", True)),

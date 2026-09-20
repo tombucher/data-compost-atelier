@@ -94,6 +94,16 @@ le sujet reste net et se sature, le fond se décompose.
 Les trois dernières viennent du datamoshing et ne vivaient que dans le temps.
 Elles se posent aussi sur une image arrêtée, à l'instant 0 de l'axe.
 
+Posé comme matière, le **datamoshing** trie les trois canaux. Dans l'axe du
+temps il garde la bizarrerie de l'original, où le rouge n'est jamais trié et
+le vert comme le bleu une fois sur deux : tenable au fil d'une séquence, mais
+sur une image arrêtée une graine sur quatre ne triait rien du tout. La
+séparation des couleurs tient de toute façon aux longueurs et aux directions
+propres à chaque canal.
+
+Les matières qui réordonnent sans changer les valeurs — les deux tris — ont
+besoin de **bavure** pour se voir ; voir plus bas.
+
 Les forces marquées d'un grain — pixellisation, trame, tri, décalage — sont
 exprimées en fraction de la toile, pas en pixels : elles gardent la même
 allure à toutes les tailles. L'interface les affiche converties au format
@@ -116,6 +126,32 @@ dégradées ont des bords hachés ; en montant, elles se fondent dans le reste.
 pourtour des zones saillantes, pas leur intérieur. L'image se réduit alors à
 un liseré autour de son sujet, dont le centre disparaît de la composition.
 À 0, le réglage est inactif.
+
+**Bavure** dit de combien les matières débordent de la zone calme. Elle
+existe parce que cette zone, qui couvre 60 % de la surface, ne porte que 14 %
+du poids de la composition : les matières y mordaient sans se voir. Une trame
+s'en sortait — elle passe l'image en noir et blanc — mais un tri de pixels ou
+un tri par canaux, qui réordonnent sans changer les valeurs, se noyaient au
+point de paraître sans effet. À 1, les matières couvrent toute l'image,
+sujet compris.
+
+**Angle** incline les matières qui travaillent par lignes : la trame, les
+deux tris, le décalage de canaux. L'image est tournée, la matière appliquée,
+puis l'image remise d'aplomb ; la double interpolation adoucit un peu le
+résultat, et ne se paie qu'en dehors de l'horizontale. Les autres matières
+n'en tiennent pas compte.
+
+### Le cadrage
+
+Deux boutons en haut du panneau.
+
+**Dans le cadre** pose chaque image entière dans la toile, ce qui laisse le
+fond noir visible autour. C'est la composition de 2024 et le réglage par
+défaut.
+
+**Plein cadre** l'agrandit jusqu'à couvrir la toile : elle déborde, le
+placement décide quelle part on garde, et il ne reste aucun fond — comme sur
+une capture de vidéo.
 
 ### Les formes de trame
 

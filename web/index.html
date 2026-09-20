@@ -153,16 +153,21 @@
 
   /* Infobulle : le panneau défile, donc la bulle est posée en position fixe
      par le script plutôt qu'en absolu, qui serait rogné. */
-  label[data-aide] { cursor: help; }
-  label[data-aide]::after {
-    content: "?"; font-size: 9px; vertical-align: super;
-    color: var(--discret); margin-left: 3px;
+  /* Le point d'interrogation est un bouton, en bout de ligne, et la bulle
+     s'ouvre au clic : au survol elle s'ouvrait dès qu'on traversait le
+     panneau pour atteindre un curseur. */
+  .aide {
+    flex: 0 0 auto; width: 16px; height: 16px; padding: 0; margin-left: 2px;
+    border-radius: 50%; font-size: 10px; line-height: 1;
+    background: transparent; border: 1px solid var(--bord); color: var(--discret);
   }
+  .aide:hover { background: #2c2c25; color: var(--texte); }
+  .aide.ouverte { background: var(--accent); border-color: var(--accent); color: #17170f; }
   #bulle {
-    position: fixed; z-index: 50; max-width: 260px; display: none;
+    position: fixed; z-index: 50; max-width: 270px; display: none;
     background: #0c0c0a; color: var(--texte); border: 1px solid #45453c;
     border-radius: 5px; padding: 8px 10px; font-size: 11.5px; line-height: 1.5;
-    box-shadow: 0 6px 20px rgba(0, 0, 0, .55); pointer-events: none;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, .55);
   }
   .note.reussite { color: var(--accent); word-break: break-all; }
 </style>
@@ -210,6 +215,12 @@
   </div>
   <div class="note" id="note-hasard">Tire images et réglages d'après les 230 œuvres conservées. Tout reste modifiable ensuite.</div>
 
+  <h2>Cadrage</h2>
+  <div class="modes">
+    <button class="mode actif" data-cadre="pose">Dans le cadre</button>
+    <button class="mode" data-cadre="plein">Plein cadre</button>
+  </div>
+
   <h2>Matières</h2>
   <div class="note bloc" id="note-cible"></div>
   <select id="cible" title="À quelle image appliquer ces matières"></select>
@@ -229,6 +240,14 @@
   <div class="effet">
     <div class="ligne"><label for="bords">Contours seuls</label><span class="valeur" id="v-bords"></span></div>
     <input type="range" id="bords" min="0" max="15" step="1" value="0">
+  </div>
+  <div class="effet">
+    <div class="ligne"><label for="bavure">Bavure</label><span class="valeur" id="v-bavure"></span></div>
+    <input type="range" id="bavure" min="0" max="1" step="0.05" value="0">
+  </div>
+  <div class="effet">
+    <div class="ligne"><label for="angle">Angle</label><span class="valeur" id="v-angle"></span></div>
+    <input type="range" id="angle" min="0" max="175" step="5" value="0">
   </div>
 
   <h2>Le temps</h2>
@@ -340,6 +359,8 @@ const AIDES = {
   'forme-halftone': "La forme du point. La ronde est celle de l'original ; elle rend plus clair que les autres, parce que son point grossit moins vite. Sous cinq ou six pixels de cellule, les formes ne se distinguent plus.",
 
   // Saillance
+  bavure: "De combien les matières débordent de la zone calme. À zéro elles s'y tiennent — or cette zone ne porte que 14 % du poids de la composition, et un tri s'y noie. En montant, elles gagnent le sujet et se voient enfin.",
+  angle: "Incline les matières qui travaillent par lignes : la trame — surtout en ligne —, les deux tris et le décalage RVB. Les autres n'en tiennent pas compte.",
   seuil: "Quelle part de l'image les matières attaquent, en partant des zones les plus calmes. À 100 %, tout y passe, sujet compris. À 0, rien n'est touché.",
   lissage: "Adoucit la carte de saillance avant de s'en servir. Au minimum, les zones dégradées ont des bords hachés ; en montant, elles se fondent dans le reste.",
   bords: "Ne garde que le pourtour des zones saillantes, au lieu de leur intérieur. L'image se réduit à un liseré autour de son sujet — le centre disparaît de la composition.",
@@ -363,9 +384,19 @@ const AIDES = {
   // Tirage
   graine: "Le nombre d'où sort toute la composition. Il ne sert qu'à revenir sur un tirage pour l'agrandir — il n'oblige à rien répéter.",
   taille: "La taille du tirage. L'aperçu reste petit pour rester vif ; c'est ici que se décide la définition du fichier écrit.",
+  cadrage: "Dans le cadre : chaque image est posée entière dans la toile, et le fond noir reste visible autour — c'est la composition de 2024. Plein cadre : elle est agrandie jusqu'à couvrir la toile et déborde, comme sur une capture de vidéo.",
 };
 
-// Le panneau défile : la bulle est posée en position fixe au survol.
+// Une seule bulle, posée en position fixe : le panneau défile, et une bulle
+// en absolu y serait rognée.
+let aideOuverte = null;
+
+function fermerAide() {
+  $('#bulle').style.display = 'none';
+  if (aideOuverte) aideOuverte.classList.remove('ouverte');
+  aideOuverte = null;
+}
+
 function brancherAides() {
   const bulle = $('#bulle');
   document.querySelectorAll('label[for]').forEach(lab => {
@@ -373,24 +404,38 @@ function brancherAides() {
     // clé de la matière elle-même.
     const cible = lab.getAttribute('for').replace(/^on-/, '');
     const texte = AIDES[cible];
-    if (!texte) return;
-    lab.dataset.aide = '1';
-    lab.onmouseenter = () => {
+    if (!texte || lab.parentElement.querySelector('.aide')) return;
+
+    const bouton = document.createElement('button');
+    bouton.className = 'aide';
+    bouton.type = 'button';
+    bouton.textContent = '?';
+    bouton.setAttribute('aria-label', 'À quoi sert ce réglage');
+    // En bout de ligne, après la valeur : la colonne des « ? » reste droite
+    lab.parentElement.appendChild(bouton);
+
+    bouton.onclick = evenement => {
+      evenement.stopPropagation();
+      if (aideOuverte === bouton) return fermerAide();
+      fermerAide();
+      aideOuverte = bouton;
+      bouton.classList.add('ouverte');
       bulle.textContent = texte;
       bulle.style.display = 'block';
-      const r = lab.getBoundingClientRect();
-      // Rabattue à gauche du libellé, et remontée si elle sort par le bas
+      const r = bouton.getBoundingClientRect();
       const large = bulle.offsetWidth, haute = bulle.offsetHeight;
-      bulle.style.left = Math.max(8, r.left - large - 12) + 'px';
+      bulle.style.left = Math.max(8, r.left - large - 10) + 'px';
       bulle.style.top = Math.min(window.innerHeight - haute - 8,
-                                 Math.max(8, r.top - 4)) + 'px';
+                                 Math.max(8, r.top - 6)) + 'px';
     };
-    lab.onmouseleave = () => { bulle.style.display = 'none'; };
   });
-  // Le menu des formes n'a pas de libellé : il porte son aide lui-même
   const menu = $('#forme-halftone');
   if (menu) menu.title = AIDES['forme-halftone'];
 }
+
+// Un clic ailleurs, ou Échap, referme la bulle
+document.addEventListener('click', fermerAide);
+document.addEventListener('keydown', e => { if (e.key === 'Escape') fermerAide(); });
 
 
 function reglagesNeufs() {
@@ -405,7 +450,7 @@ const AXE = ['frames', 'stagger', 'residue', 'min_segment', 'max_segment',
 const BASCULES = ['enhanced', 'channel_quirk', 'sort_visible', 'even_dissolve'];
 
 const etat = {
-  totalFrames: 48,
+  totalFrames: 48, pleinCadre: false,
   disponibles: [], choisies: [],
   effets: reglagesNeufs(),   // réglage commun
   propres: {},               // réglages propres, par chemin d'image
@@ -592,11 +637,14 @@ function appliquer(r) {
   peindreChoix();
   $('#graine').value = r.seed;
   $('#seuil').value = r.threshold;
+  if (r.bleed !== undefined) $('#bavure').value = r.bleed;
+  if (r.angle !== undefined) $('#angle').value = r.angle;
+  if (r.full_frame !== undefined) poserCadrage(r.full_frame);
   $('#lissage').value = r.smoothness;
   $('#bords').value = r.edge_blur;
   $('#debordement').checked = r.overflow;
-  ['seuil', 'lissage', 'bords'].forEach(id => {
-    $('#v-' + id).textContent = id === 'seuil' ? $('#' + id).value + ' %' : $('#' + id).value;
+  ['seuil', 'lissage', 'bords', 'bavure', 'angle'].forEach(id => {
+    $('#v-' + id).textContent = UNITES[id] ? UNITES[id]($('#' + id).value) : $('#' + id).value;
   });
 
   const versReglages = liste => {
@@ -641,6 +689,9 @@ function corps(extra = {}) {
     per_image: etat.choisies.map(
       chemin => etat.propres[chemin] ? enListe(etat.propres[chemin]) : null),
     threshold: parseInt($('#seuil').value),
+    bleed: parseFloat($('#bavure').value),
+    angle: parseFloat($('#angle').value),
+    full_frame: etat.pleinCadre,
     smoothness: parseFloat($('#lissage').value),
     edge_blur: parseInt($('#bords').value),
     overflow: $('#debordement').checked,
@@ -793,10 +844,12 @@ function montrerTemps() {
 }
 
 // --- branchements -----------------------------------------------------------
-['seuil', 'lissage', 'bords'].forEach(id => {
+const UNITES = { seuil: v => v + ' %', bavure: v => Math.round(v * 100) + ' %',
+                 angle: v => v + '°' };
+['seuil', 'lissage', 'bords', 'bavure', 'angle'].forEach(id => {
   const el = $('#' + id);
   const montrer = () => {
-    $('#v-' + id).textContent = id === 'seuil' ? el.value + ' %' : el.value;
+    $('#v-' + id).textContent = UNITES[id] ? UNITES[id](el.value) : el.value;
   };
   el.oninput = () => { montrer(); demanderRendu(); };
   montrer();
@@ -847,6 +900,15 @@ BASCULES.forEach(cle => { $('#' + cle).onchange = demanderRendu; });
 function montrerAxe() { AXE.forEach(cle => $('#' + cle).dispatchEvent(new Event('afficher'))); }
 
 $('#temps').oninput = () => { montrerTemps(); demanderRendu(); };
+
+function poserCadrage(plein) {
+  etat.pleinCadre = !!plein;
+  document.querySelectorAll('[data-cadre]').forEach(b =>
+    b.classList.toggle('actif', (b.dataset.cadre === 'plein') === etat.pleinCadre));
+}
+document.querySelectorAll('[data-cadre]').forEach(b => {
+  b.onclick = () => { poserCadrage(b.dataset.cadre === 'plein'); demanderRendu(); };
+});
 $('#dossier').onchange = () => changerDossier($('#dossier').value);
 $('#cible').onchange = () => { etat.cible = $('#cible').value; peindreEffets(); };
 $('#tirer-video').onclick = tirerVideo;

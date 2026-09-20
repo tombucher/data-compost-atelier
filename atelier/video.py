@@ -180,15 +180,27 @@ def sort_channels_separately(
     ])
 
 
-def shift_channels(image: np.ndarray, shift: int, rng: random.Random) -> np.ndarray:
+def shift_channels(image: np.ndarray, shift: int, rng: random.Random,
+                   angle: float | None = None) -> np.ndarray:
     """Décale les canaux rouge et bleu en sens opposés.
 
     La direction était tirée par le `random` global de l'original ; elle vient
-    maintenant du tirage de la recette, pour qu'une séquence se rejoue.
+    maintenant du tirage de la recette, pour qu'une séquence se rejoue. Un
+    `angle` explicite la fixe : le décalage suit alors cette direction au
+    lieu d'être tiré.
     """
     if shift <= 0:
         return image
     blue, green, red = cv2.split(image)
+
+    if angle is not None:
+        radians = np.deg2rad(angle)
+        dx = int(round(shift * np.cos(radians)))
+        dy = int(round(shift * np.sin(radians)))
+        red = np.roll(np.roll(red, dx, axis=1), dy, axis=0)
+        blue = np.roll(np.roll(blue, -dx, axis=1), -dy, axis=0)
+        return cv2.merge([blue, green, red])
+
     if rng.random() < 0.7:  # horizontal sept fois sur dix, comme l'original
         red = np.roll(red, shift, axis=1)
         blue = np.roll(blue, -shift, axis=1)
@@ -196,6 +208,43 @@ def shift_channels(image: np.ndarray, shift: int, rng: random.Random) -> np.ndar
         red = np.roll(red, shift // 2, axis=0)
         blue = np.roll(blue, -shift // 2, axis=0)
     return cv2.merge([blue, green, red])
+
+
+def along_angle(image: np.ndarray, mask: np.ndarray, angle: float, work):
+    """Applique une matière selon un axe incliné.
+
+    Le tri et la trame travaillent par lignes ou par colonnes ; pour les
+    incliner, on tourne l'image, on applique, et on remet d'aplomb. Le
+    passage se fait dans un carré de la taille de la diagonale, sinon les
+    coins sortiraient du cadre et reviendraient noirs. La double
+    interpolation adoucit un peu le résultat : c'est le prix d'un angle
+    libre, et il ne se paie qu'en dehors de l'horizontale.
+    """
+    if abs(angle) % 180.0 < 0.5:
+        return work(image, mask)
+
+    height, width = image.shape[:2]
+    cote = int(np.ceil(np.hypot(height, width)))
+    haut, gauche = (cote - height) // 2, (cote - width) // 2
+    bas, droite = cote - height - haut, cote - width - gauche
+
+    grand = cv2.copyMakeBorder(image, haut, bas, gauche, droite, cv2.BORDER_REFLECT)
+    grand_masque = cv2.copyMakeBorder(
+        mask.astype(np.uint8), haut, bas, gauche, droite, cv2.BORDER_CONSTANT, value=0
+    )
+    centre = (cote / 2.0, cote / 2.0)
+    aller = cv2.getRotationMatrix2D(centre, angle, 1.0)
+    retour = cv2.getRotationMatrix2D(centre, -angle, 1.0)
+
+    tourne = cv2.warpAffine(grand, aller, (cote, cote),
+                            flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REFLECT)
+    tourne_masque = cv2.warpAffine(grand_masque, aller, (cote, cote),
+                                   flags=cv2.INTER_NEAREST) > 0
+
+    fait = work(tourne, tourne_masque)
+    remis = cv2.warpAffine(fait, retour, (cote, cote), flags=cv2.INTER_LINEAR,
+                           borderMode=cv2.BORDER_REFLECT)
+    return remis[haut:haut + height, gauche:gauche + width]
 
 
 def mask_sequence(saliency: np.ndarray, frames: int,

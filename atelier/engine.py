@@ -81,6 +81,20 @@ class Recipe:
     # seuil brut au-delà de 30 sur 255 recouvrait déjà tout. Les neuf dixièmes
     # de la course du réglage ne servaient à rien.
     saliency_threshold: int = 60
+    # Jusqu'où les matières débordent de la zone calme, de 0 à 1. À 0 elles
+    # s'y tiennent ; à 1 elles couvrent toute l'image, sujet compris. Sans
+    # elle, les matières ne mordent que sur la part de l'image qui pèse le
+    # moins dans la composition, et tout ce qui ne transforme pas
+    # radicalement — un tri, un décalage — s'y noie.
+    bleed: float = 0.0
+    # L'angle, en degrés, des matières qui en ont un : la trame, le tri par
+    # canaux, le décalage de canaux.
+    angle: float = 0.0
+    # Le cadrage. Par défaut, chaque image est posée entière dans la toile,
+    # ce qui laisse le fond noir autour — c'est la composition de 2024. En
+    # plein cadre, elle est agrandie jusqu'à couvrir la toile et déborde : il
+    # ne reste pas de fond, comme sur une capture de vidéo.
+    full_frame: bool = False
     smoothness: float = 3.0
     edge_blur: int = 0
     # Le débordement uint8 de la saturation, préservé tel quel : seize œuvres
@@ -143,13 +157,26 @@ def saliency_of(image: np.ndarray) -> np.ndarray:
 
 
 def smooth_mask(mask: np.ndarray, smoothness: float, edge_blur: int) -> np.ndarray:
-    """Adoucit la carte de saillance, et peut n'en garder que les bords."""
+    """Adoucit la carte de saillance, et peut n'en garder que les bords.
+
+    Le gradient morphologique demande un noyau d'au moins 3 : à 1, dilatation
+    et érosion rendent la carte inchangée, leur différence est nulle partout,
+    et l'image disparaissait entièrement de la composition. Le gradient d'une
+    carte déjà lissée est par ailleurs de très faible amplitude — sur des
+    photographies, un maximum de 13 sur 255 — donc invisible aussi. Il est
+    ramené à toute la plage, sans quoi le réglage n'aurait jamais servi.
+    """
     if smoothness > 0:
         mask = cv2.GaussianBlur(mask, (0, 0), smoothness)
     if edge_blur > 0:
-        kernel = np.ones((edge_blur, edge_blur), np.uint8)
+        largeur = max(3, int(edge_blur) | 1)
+        kernel = np.ones((largeur, largeur), np.uint8)
         mask = cv2.morphologyEx(mask, cv2.MORPH_GRADIENT, kernel)
-        mask = cv2.GaussianBlur(mask, (0, 0), edge_blur)
+        mask = cv2.GaussianBlur(mask, (0, 0), max(1.0, largeur / 3.0))
+        crete = float(mask.max())
+        if crete > 0:
+            mask = np.clip(mask.astype(np.float32) * (255.0 / crete), 0, 255) \
+                     .astype(mask.dtype)
     return mask
 
 
@@ -336,11 +363,20 @@ def apply_effects(
     décompose.
     """
     part = float(np.clip(recipe.saliency_threshold, 0, 100)) / 100.0
+    # La bavure pousse le seuil vers le haut : à 1, la zone couvre tout.
+    bave = float(np.clip(recipe.bleed, 0.0, 1.0))
+    part = part + (1.0 - part) * bave
     quiet = saliency < np.quantile(saliency, part) if 0 < part < 1 \
         else (np.ones_like(saliency, bool) if part >= 1 else np.zeros_like(saliency, bool))
     result = image
 
     for effect in (recipe.effects if effects is None else effects):
+        # L'angle de la recette, pour les matières qui travaillent par
+        # lignes : la trame, les deux tris, le décalage de canaux.
+        from atelier.video import along_angle
+
+        angle = float(recipe.angle) % 180.0
+
         if effect.name == "pixelate":
             result = apply_pixelate(result, quiet, effect.pixels(canvas))
         elif effect.name == "bitmap":
@@ -350,34 +386,54 @@ def apply_effects(
                 result, ~quiet, effect.strength, recipe.saturation_overflow
             )
         elif effect.name == "halftone":
-            result = apply_halftone(result, quiet, effect.pixels(canvas),
-                                    effect.shape)
+            cell = effect.pixels(canvas)
+            result = along_angle(
+                result, quiet, angle,
+                lambda img, msk: apply_halftone(img, msk, cell, effect.shape),
+            )
         elif effect.name == "pixelsort":
             # Importé ici : video importe engine, l'inverse au chargement
             # ferait un cycle.
             from atelier.video import pixel_sort
 
             low = effect.pixels(canvas, minimum=4)
-            result = pixel_sort(result, quiet, "brightness", False, low, low * 4)
+            result = along_angle(
+                result, quiet, angle,
+                lambda img, msk: pixel_sort(
+                    img, msk, "brightness", False, low, low * 4),
+            )
         elif effect.name == "shift":
             from atelier.video import shift_channels
 
             result = shift_channels(
                 result, effect.pixels(canvas, minimum=1),
                 random.Random(f"{recipe.seed}:shift"),
+                angle if recipe.angle else None,
             )
         elif effect.name == "mosh":
-            # Le tri canal par canal : c'est lui qui sépare les couleurs, et
-            # il n'existait jusqu'ici que dans l'axe du temps. Il se pose
-            # aussi sur une image arrêtée.
+            # Le tri canal par canal : c'est lui qui sépare les couleurs.
+            #
+            # `quirk=False` ici, contrairement à l'axe du temps. La
+            # bizarrerie de l'original tire pour chaque canal une méthode de
+            # tri, et le rouge ne tire qu'entre deux méthodes sans effet sur
+            # un gris : il n'est donc jamais trié, et le vert comme le bleu
+            # une fois sur deux. Une graine sur quatre ne triait rien du
+            # tout. C'est tenable au fil d'une séquence, où les frames se
+            # succèdent ; posé comme matière sur une image arrêtée, cela
+            # donne un effet invisible. La séparation des couleurs tient de
+            # toute façon aux longueurs et aux directions propres à chaque
+            # canal, que `sort_channels_separately` conserve.
             from atelier.video import sort_channels_separately
 
             low = effect.pixels(canvas, minimum=4)
-            result = sort_channels_separately(
-                result, quiet, False, canvas,
-                random.Random(f"{recipe.seed}:mosh"),
-                np.random.default_rng(recipe.seed),
-                True, low, low * 4,
+            result = along_angle(
+                result, quiet, angle,
+                lambda img, msk: sort_channels_separately(
+                    img, msk, False, canvas,
+                    random.Random(f"{recipe.seed}:mosh"),
+                    np.random.default_rng(recipe.seed),
+                    False, low, low * 4,
+                ),
             )
 
     return result
@@ -412,6 +468,39 @@ def load_source(path: str | Path) -> np.ndarray:
     return image
 
 
+def layer_geometry(image: np.ndarray, placement, size: int, full_frame: bool):
+    """Où et à quelle échelle une image atterrit sur la toile.
+
+    Posée entière, elle tient dans une part de la toile et le fond reste
+    visible autour. En plein cadre, elle est agrandie jusqu'à couvrir la
+    toile ; elle déborde alors, et le placement choisit quelle part on garde.
+    """
+    height, width = image.shape[:2]
+    scale = (size / min(height, width) if full_frame
+             else (SOURCE_SPAN * size) / max(height, width))
+    target = (max(1, int(round(width * scale))), max(1, int(round(height * scale))))
+    # Un écart négatif — l'image est plus large que la toile — donne un
+    # décalage négatif, donc un recadrage. C'est voulu.
+    x = int(round(placement.fx * (size - target[0])))
+    y = int(round(placement.fy * (size - target[1])))
+    return target, x, y
+
+
+def blend_into(canvas, weights, tile, weight, x: int, y: int) -> None:
+    """Ajoute une tuile pondérée à la toile, en coupant ce qui en sort."""
+    toile_h, toile_l = canvas.shape[:2]
+    tuile_h, tuile_l = tile.shape[:2]
+    x0, y0 = max(0, x), max(0, y)
+    x1, y1 = min(toile_l, x + tuile_l), min(toile_h, y + tuile_h)
+    if x0 >= x1 or y0 >= y1:
+        return
+    sx, sy = x0 - x, y0 - y
+    part = tile[sy:sy + (y1 - y0), sx:sx + (x1 - x0)]
+    poids = weight[sy:sy + (y1 - y0), sx:sx + (x1 - x0)]
+    canvas[y0:y1, x0:x1] += part * poids[:, :, None]
+    weights[y0:y1, x0:x1] += poids
+
+
 def render(recipe: Recipe, size: int = PREVIEW_SIZE, sources=None) -> np.ndarray:
     """Rend la composition sur une toile carrée de `size` pixels.
 
@@ -424,13 +513,9 @@ def render(recipe: Recipe, size: int = PREVIEW_SIZE, sources=None) -> np.ndarray
 
     canvas = np.zeros((size, size, 3), dtype=np.float32)
     weights = np.zeros((size, size), dtype=np.float32)
-    span = max(1, int(round(SOURCE_SPAN * size)))
 
     for index, (image, placement) in enumerate(zip(images, placements_for(recipe))):
-        height, width = image.shape[:2]
-        scale = span / max(height, width)
-        target = (max(1, int(round(width * scale))), max(1, int(round(height * scale))))
-
+        target, x, y = layer_geometry(image, placement, size, recipe.full_frame)
         resized = cv2.resize(image, target, interpolation=cv2.INTER_AREA)
         saliency = smooth_mask(
             cv2.resize(saliency_of(image), target, interpolation=cv2.INTER_LINEAR),
@@ -438,17 +523,11 @@ def render(recipe: Recipe, size: int = PREVIEW_SIZE, sources=None) -> np.ndarray
             recipe.edge_blur,
         )
 
-        # Position en pixels, déduite de la fraction : même cadrage à toute taille
-        x = int(round(placement.fx * max(0, size - target[0])))
-        y = int(round(placement.fy * max(0, size - target[1])))
-
         treated = apply_effects(
             resized, saliency, recipe, size, effects_for(recipe, index)
         )
         weight = saliency.astype(np.float32) / 255.0
-
-        canvas[y:y + target[1], x:x + target[0]] += treated * weight[:, :, None]
-        weights[y:y + target[1], x:x + target[0]] += weight
+        blend_into(canvas, weights, treated, weight, x, y)
 
     covered = weights > 0
     canvas[covered] /= weights[covered][:, None]

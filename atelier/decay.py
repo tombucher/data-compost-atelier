@@ -31,10 +31,11 @@ import cv2
 import numpy as np
 
 from atelier.engine import (
-    SOURCE_SPAN,
     Recipe,
     apply_effects,
+    blend_into,
     effects_for,
+    layer_geometry,
     load_source,
     placements_for,
     saliency_of,
@@ -149,13 +150,9 @@ def compose_at(
     moment = decay.at(index)
     canvas = np.zeros((size, size, 3), dtype=np.float32)
     weights = np.zeros((size, size), dtype=np.float32)
-    span = max(1, int(round(SOURCE_SPAN * size)))
 
     for layer, (image, placement) in enumerate(zip(images, placements_for(recipe))):
-        height, width = image.shape[:2]
-        scale = span / max(height, width)
-        target = (max(1, int(round(width * scale))), max(1, int(round(height * scale))))
-
+        target, x, y = layer_geometry(image, placement, size, recipe.full_frame)
         resized = cv2.resize(image, target, interpolation=cv2.INTER_AREA)
         card = (fields[layer] if fields is not None else saliency_of(image))
         saliency = smooth_mask(
@@ -178,13 +175,8 @@ def compose_at(
         else:
             keep = np.ones(saliency.shape, dtype=np.float32)
 
-        # Position en pixels, déduite de la fraction : même cadrage à toute taille
-        x = int(round(placement.fx * max(0, size - target[0])))
-        y = int(round(placement.fy * max(0, size - target[1])))
-
         weight = saliency.astype(np.float32) / 255.0 * keep
-        canvas[y:y + target[1], x:x + target[0]] += treated * weight[:, :, None]
-        weights[y:y + target[1], x:x + target[0]] += weight
+        blend_into(canvas, weights, treated, weight, x, y)
 
     covered = weights > 1e-6
     canvas[covered] /= weights[covered][:, None]
