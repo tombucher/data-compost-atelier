@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Atelier</title>
+<style>
+  :root {
+    --fond: #121210;
+    --panneau: #1b1b18;
+    --bord: #2e2e29;
+    --texte: #e8e6df;
+    --discret: #8e8a7e;
+    --accent: #c9a227;
+    --vif: #e4e0d4;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--fond);
+    color: var(--texte);
+    font: 14px/1.5 ui-sans-serif, system-ui, -apple-system, sans-serif;
+    height: 100vh;
+    display: grid;
+    grid-template-columns: 250px 1fr 290px;
+  }
+  @media (max-width: 1000px) {
+    body { grid-template-columns: 1fr; height: auto; }
+  }
+
+  aside {
+    background: var(--panneau);
+    border-right: 1px solid var(--bord);
+    overflow-y: auto;
+    padding: 18px 16px;
+  }
+  aside:last-of-type { border-right: 0; border-left: 1px solid var(--bord); }
+
+  h1 {
+    font-size: 13px; letter-spacing: .16em; text-transform: uppercase;
+    color: var(--accent); margin: 0 0 4px;
+  }
+  .racine { color: var(--discret); font-size: 11px; word-break: break-all; margin-bottom: 18px; }
+  h2 {
+    font-size: 11px; letter-spacing: .14em; text-transform: uppercase;
+    color: var(--discret); margin: 22px 0 10px; font-weight: 600;
+  }
+  h2:first-of-type { margin-top: 0; }
+
+  /* --- sources --- */
+  .vignette {
+    display: flex; align-items: center; gap: 10px;
+    padding: 5px; margin-bottom: 4px; border-radius: 4px;
+    cursor: pointer; border: 1px solid transparent;
+  }
+  .vignette:hover { background: #24241f; }
+  .vignette.choisie { border-color: var(--accent); background: #26241c; }
+  .vignette img {
+    width: 42px; height: 42px; object-fit: cover;
+    border-radius: 3px; background: #000; flex-shrink: 0;
+  }
+  .vignette span {
+    font-size: 11px; color: var(--discret);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .vignette.choisie span { color: var(--texte); }
+  .ordre {
+    margin-left: auto; font-size: 10px; color: var(--accent);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .tirage {
+    padding: 6px 8px; margin-bottom: 4px; border-radius: 4px;
+    border: 1px solid var(--bord); cursor: pointer; font-size: 11px;
+  }
+  .tirage:hover { background: #24241f; border-color: #47473d; }
+  .tirage b { color: var(--accent); font-weight: 600; font-variant-numeric: tabular-nums; }
+  .tirage em { color: var(--discret); font-style: normal; display: block; }
+  .tirage.incomplet { opacity: .5; cursor: not-allowed; }
+
+  /* --- aperçu --- */
+  main {
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    padding: 24px; gap: 14px; min-height: 60vh;
+  }
+  #apercu {
+    max-width: 100%; max-height: calc(100vh - 110px);
+    background: #000; border: 1px solid var(--bord);
+    image-rendering: auto;
+  }
+  #apercu.attente { opacity: .45; transition: opacity .2s; }
+  .etat {
+    font-size: 11px; color: var(--discret);
+    font-variant-numeric: tabular-nums; min-height: 16px;
+  }
+  .vide { color: var(--discret); text-align: center; max-width: 320px; }
+
+  /* --- réglages --- */
+  .effet { margin-bottom: 14px; }
+  .ligne { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+  .ligne label { flex: 1; cursor: pointer; user-select: none; }
+  .ligne .valeur {
+    color: var(--discret); font-size: 11px; font-variant-numeric: tabular-nums;
+  }
+  input[type=range] { width: 100%; accent-color: var(--accent); cursor: pointer; }
+  input[type=range]:disabled { opacity: .3; cursor: default; }
+  input[type=checkbox] { accent-color: var(--accent); cursor: pointer; }
+
+  .graine { display: flex; gap: 6px; align-items: center; }
+  input[type=number], input[type=text], select {
+    background: #101010; color: var(--texte);
+    border: 1px solid var(--bord); border-radius: 4px;
+    padding: 6px 8px; font: inherit; font-size: 12px; width: 100%;
+    font-variant-numeric: tabular-nums;
+  }
+  button {
+    background: #262620; color: var(--vif);
+    border: 1px solid var(--bord); border-radius: 4px;
+    padding: 8px 10px; font: inherit; font-size: 12px; cursor: pointer;
+    white-space: nowrap;
+  }
+  button:hover { background: #31312a; border-color: #47473d; }
+  button.principal { background: var(--accent); color: #17170f; border-color: var(--accent); font-weight: 600; }
+  button.principal:hover { background: #dcb433; }
+  button:disabled { opacity: .4; cursor: default; }
+  .rangee { display: flex; gap: 6px; }
+  .note { font-size: 11px; color: var(--discret); margin-top: 8px; line-height: 1.45; }
+  .note.reussite { color: var(--accent); word-break: break-all; }
+</style>
+</head>
+<body>
+
+<aside>
+  <h1>Atelier</h1>
+  <div class="racine" id="racine">…</div>
+  <h2>Images</h2>
+  <div id="sources"></div>
+
+  <h2>Reprendre</h2>
+  <div id="tirages"><div class="note">Aucun tirage pour l'instant.</div></div>
+</aside>
+
+<main>
+  <img id="apercu" alt="aperçu" hidden>
+  <div class="vide" id="vide">Choisissez au moins une image à gauche.</div>
+  <div class="etat" id="etat"></div>
+</main>
+
+<aside>
+  <h2>Matières</h2>
+  <div id="effets"></div>
+
+  <h2>Saillance</h2>
+  <div class="effet">
+    <div class="ligne"><label for="seuil">Seuil</label><span class="valeur" id="v-seuil"></span></div>
+    <input type="range" id="seuil" min="0" max="255" step="1" value="120">
+  </div>
+  <div class="effet">
+    <div class="ligne"><label for="lissage">Lissage</label><span class="valeur" id="v-lissage"></span></div>
+    <input type="range" id="lissage" min="0" max="12" step="0.5" value="3">
+  </div>
+  <div class="effet">
+    <div class="ligne"><label for="bords">Contours seuls</label><span class="valeur" id="v-bords"></span></div>
+    <input type="range" id="bords" min="0" max="15" step="1" value="0">
+  </div>
+
+  <h2>Tirage</h2>
+  <div class="effet">
+    <div class="ligne"><label for="graine">Graine</label></div>
+    <div class="graine">
+      <input type="number" id="graine" placeholder="au hasard">
+      <button id="relancer" title="Nouveau tirage">↻</button>
+    </div>
+    <div class="note">Le hasard décide de la composition. La graine sert seulement à retrouver un tirage pour l'agrandir.</div>
+  </div>
+  <div class="effet">
+    <div class="ligne"><label for="taille">Format</label><span class="valeur" id="v-taille"></span></div>
+    <select id="taille">
+      <option value="2000">2000 px</option>
+      <option value="4000" selected>4000 px</option>
+      <option value="6000">6000 px</option>
+      <option value="8000">8000 px</option>
+    </select>
+  </div>
+  <div class="rangee">
+    <button class="principal" id="exporter" style="flex:1">Tirer</button>
+    <select id="format" style="width:auto"><option value="jpg">JPEG</option><option value="png">PNG</option></select>
+  </div>
+  <div class="note" id="resultat"></div>
+
+  <h2>Fidélité</h2>
+  <div class="ligne">
+    <input type="checkbox" id="debordement" checked>
+    <label for="debordement">Débordement de saturation</label>
+  </div>
+  <div class="note">Le dépassement d'origine, qui casse les couleurs au-delà de 255. Seize œuvres de 2024 en dépendent.</div>
+</aside>
+
+<script>
+const EFFETS = [
+  { cle:'pixelate', nom:'Pixellisation', min:0.002, max:0.05,  pas:0.001, defaut:0.008, unite:'grain' },
+  { cle:'bitmap',   nom:'Bitmap',        min:0,     max:1,     pas:0.01,  defaut:0.70,  unite:'mélange' },
+  { cle:'saturate', nom:'Saturation',    min:1,     max:4,     pas:0.05,  defaut:2.00,  unite:'×' },
+  { cle:'halftone', nom:'Trame',         min:0.003, max:0.04,  pas:0.001, defaut:0.010, unite:'grain' },
+];
+
+const etat = {
+  disponibles: [], choisies: [],
+  effets: Object.fromEntries(EFFETS.map(e => [e.cle, { actif:false, force:e.defaut }])),
+};
+
+const $ = s => document.querySelector(s);
+let minuterie = null, enCours = false, aRefaire = false;
+
+// --- construction des réglages ---------------------------------------------
+function batirEffets() {
+  $('#effets').innerHTML = EFFETS.map(e => `
+    <div class="effet">
+      <div class="ligne">
+        <input type="checkbox" id="on-${e.cle}">
+        <label for="on-${e.cle}">${e.nom}</label>
+        <span class="valeur" id="v-${e.cle}"></span>
+      </div>
+      <input type="range" id="f-${e.cle}" min="${e.min}" max="${e.max}" step="${e.pas}" value="${e.defaut}" disabled>
+    </div>`).join('');
+
+  EFFETS.forEach(e => {
+    const bascule = $(`#on-${e.cle}`), curseur = $(`#f-${e.cle}`);
+    bascule.onchange = () => {
+      etat.effets[e.cle].actif = bascule.checked;
+      curseur.disabled = !bascule.checked;
+      afficherValeur(e); demanderRendu();
+    };
+    curseur.oninput = () => {
+      etat.effets[e.cle].force = parseFloat(curseur.value);
+      afficherValeur(e); demanderRendu();
+    };
+    afficherValeur(e);
+  });
+}
+
+function afficherValeur(e) {
+  const { actif, force } = etat.effets[e.cle];
+  const champ = $(`#v-${e.cle}`);
+  if (!actif) { champ.textContent = ''; return; }
+  // Un grain exprimé en fraction se lit mal : on le montre en pixels sur le format visé
+  champ.textContent = e.unite === 'grain'
+    ? `${Math.max(2, Math.round(force * parseInt($('#taille').value)))} px`
+    : `${force.toFixed(2)} ${e.unite}`;
+}
+
+// --- sources ----------------------------------------------------------------
+async function chargerSources() {
+  const r = await fetch('/api/sources');
+  const d = await r.json();
+  $('#racine').textContent = d.root;
+  etat.disponibles = d.images;
+
+  if (!d.images.length) {
+    $('#sources').innerHTML = '<div class="note">Aucune image dans ce dossier.</div>';
+    return;
+  }
+  $('#sources').innerHTML = d.images.map(i => `
+    <div class="vignette" data-chemin="${i.path}">
+      <img loading="lazy" src="/api/thumbnail?path=${encodeURIComponent(i.path)}" alt="">
+      <span>${i.name}</span><span class="ordre"></span>
+    </div>`).join('');
+
+  document.querySelectorAll('.vignette').forEach(el => {
+    el.onclick = () => {
+      const chemin = el.dataset.chemin;
+      const rang = etat.choisies.indexOf(chemin);
+      if (rang === -1) etat.choisies.push(chemin); else etat.choisies.splice(rang, 1);
+      peindreChoix(); demanderRendu();
+    };
+  });
+}
+
+function peindreChoix() {
+  document.querySelectorAll('.vignette').forEach(el => {
+    const rang = etat.choisies.indexOf(el.dataset.chemin);
+    el.classList.toggle('choisie', rang !== -1);
+    el.querySelector('.ordre').textContent = rang === -1 ? '' : rang + 1;
+  });
+}
+
+// --- tirages déjà faits ------------------------------------------------------
+async function chargerTirages() {
+  const d = await (await fetch('/api/exports')).json();
+  const zone = $('#tirages');
+  if (!d.exports.length) {
+    zone.innerHTML = '<div class="note">Aucun tirage pour l\'instant.</div>';
+    return;
+  }
+  zone.innerHTML = d.exports.map((t, i) => `
+    <div class="tirage ${t.complete ? '' : 'incomplet'}" data-rang="${i}">
+      <b>graine ${t.seed}</b>
+      <em>${t.complete ? t.name : 'images sources introuvables'}</em>
+    </div>`).join('');
+
+  zone.querySelectorAll('.tirage:not(.incomplet)').forEach(el => {
+    el.onclick = () => appliquer(d.exports[parseInt(el.dataset.rang)].recipe);
+  });
+}
+
+function appliquer(r) {
+  etat.choisies = r.sources.slice();
+  peindreChoix();
+  $('#graine').value = r.seed;
+  $('#seuil').value = r.threshold;
+  $('#lissage').value = r.smoothness;
+  $('#bords').value = r.edge_blur;
+  $('#debordement').checked = r.overflow;
+  ['seuil', 'lissage', 'bords'].forEach(id => { $('#v-' + id).textContent = $('#' + id).value; });
+
+  const actifs = Object.fromEntries(r.effects.map(e => [e.name, e.strength]));
+  EFFETS.forEach(e => {
+    const force = actifs[e.cle];
+    etat.effets[e.cle] = { actif: force !== undefined, force: force ?? e.defaut };
+    $(`#on-${e.cle}`).checked = etat.effets[e.cle].actif;
+    $(`#f-${e.cle}`).value = etat.effets[e.cle].force;
+    $(`#f-${e.cle}`).disabled = !etat.effets[e.cle].actif;
+    afficherValeur(e);
+  });
+  rendre();
+}
+
+// --- rendu ------------------------------------------------------------------
+function corps(extra = {}) {
+  return {
+    sources: etat.choisies,
+    seed: $('#graine').value ? parseInt($('#graine').value) : null,
+    effects: EFFETS.filter(e => etat.effets[e.cle].actif)
+                   .map(e => ({ name: e.cle, strength: etat.effets[e.cle].force })),
+    threshold: parseInt($('#seuil').value),
+    smoothness: parseFloat($('#lissage').value),
+    edge_blur: parseInt($('#bords').value),
+    overflow: $('#debordement').checked,
+    ...extra,
+  };
+}
+
+function demanderRendu() {
+  clearTimeout(minuterie);
+  minuterie = setTimeout(rendre, 140);   // on laisse le curseur se poser
+}
+
+async function rendre() {
+  if (!etat.choisies.length) {
+    $('#apercu').hidden = true; $('#vide').hidden = false; $('#etat').textContent = '';
+    return;
+  }
+  if (enCours) { aRefaire = true; return; }   // une seule requête à la fois
+  enCours = true;
+  $('#apercu').classList.add('attente');
+
+  const depart = performance.now();
+  try {
+    const r = await fetch('/api/render', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(corps()),
+    });
+    if (!r.ok) throw new Error((await r.json()).error || 'échec du rendu');
+
+    const graine = r.headers.get('X-Atelier-Seed');
+    if (graine && !$('#graine').value) $('#graine').value = graine;
+
+    const image = URL.createObjectURL(await r.blob());
+    const vue = $('#apercu');
+    if (vue.src) URL.revokeObjectURL(vue.src);
+    vue.src = image; vue.hidden = false; $('#vide').hidden = true;
+
+    $('#etat').textContent =
+      `${etat.choisies.length} image${etat.choisies.length > 1 ? 's' : ''} · `
+      + `graine ${graine} · ${Math.round(performance.now() - depart)} ms`;
+  } catch (e) {
+    $('#etat').textContent = e.message;
+  } finally {
+    enCours = false;
+    $('#apercu').classList.remove('attente');
+    if (aRefaire) { aRefaire = false; rendre(); }
+  }
+}
+
+// --- tirage -----------------------------------------------------------------
+async function exporter() {
+  if (!etat.choisies.length) return;
+  const bouton = $('#exporter'), taille = parseInt($('#taille').value);
+  bouton.disabled = true;
+  bouton.textContent = 'Calcul…';
+  $('#resultat').textContent = '';
+  $('#resultat').className = 'note';
+
+  try {
+    const r = await fetch('/api/export', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(corps({ size: taille, format: $('#format').value })),
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error);
+    $('#resultat').className = 'note reussite';
+    $('#resultat').textContent = `${d.centimetres} cm à 300 dpi → ${d.path}`;
+    chargerTirages();
+  } catch (e) {
+    $('#resultat').textContent = e.message;
+  } finally {
+    bouton.disabled = false;
+    bouton.textContent = 'Tirer';
+  }
+}
+
+// --- branchements -----------------------------------------------------------
+['seuil', 'lissage', 'bords'].forEach(id => {
+  const el = $('#' + id);
+  const montrer = () => { $('#v-' + id).textContent = el.value; };
+  el.oninput = () => { montrer(); demanderRendu(); };
+  montrer();
+});
+$('#debordement').onchange = demanderRendu;
+$('#graine').onchange = demanderRendu;
+$('#relancer').onclick = () => { $('#graine').value = ''; rendre(); };
+$('#taille').onchange = () => EFFETS.forEach(afficherValeur);
+$('#exporter').onclick = exporter;
+
+batirEffets();
+chargerSources();
+chargerTirages();
+</script>
+</body>
+</html>
