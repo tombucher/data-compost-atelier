@@ -548,17 +548,32 @@ def blend_into(canvas, weights, tile, weight, x: int, y: int) -> None:
     weights[y0:y1, x0:x1] += poids
 
 
-def toile_pour(recipe: Recipe, size: int) -> tuple[int, tuple | None]:
-    """La taille de toile à calculer pour qu'un cadre sorte à `size`.
+# Plafond de la toile de calcul. Une toile porte un canvas en float32 à
+# trois canaux plus sa carte de poids, soit seize octets par pixel : à
+# 32000 px elle demanderait seize gigaoctets, et la machine part en mémoire
+# virtuelle sans jamais rendre la main. Un cadre serré sur un grand tirage y
+# menait sans prévenir.
+TOILE_MAX = 10000
+
+
+def toile_pour(recipe: Recipe, size: int) -> tuple[int, tuple | None, int]:
+    """La toile à calculer, le cadre, et la taille que la sortie aura.
 
     Garder la moitié de la toile demande de la rendre deux fois plus
     grande : c'est ce qui distingue un cadre d'un simple rognage, qui
-    perdrait la définition qu'on vient de demander.
+    perdrait la définition qu'on vient de demander. Au-delà du plafond, la
+    toile s'arrête là et la sortie est plus petite que demandé — le troisième
+    renvoi dit laquelle, pour qu'on puisse l'annoncer plutôt que de laisser
+    croire à la taille voulue.
     """
     cadre = recipe.crop_clair()
     if cadre is None:
-        return size, None
-    return max(size, int(round(size / cadre[2]))), cadre
+        return min(size, TOILE_MAX), None, min(size, TOILE_MAX)
+
+    voulue = max(size, int(round(size / cadre[2])))
+    toile = min(voulue, TOILE_MAX)
+    sortie = size if toile == voulue else max(1, int(round(toile * cadre[2])))
+    return toile, cadre, sortie
 
 
 def decouper(toile: np.ndarray, cadre, size: int) -> np.ndarray:

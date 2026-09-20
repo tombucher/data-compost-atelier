@@ -240,6 +240,46 @@ JOBS: dict[str, dict] = {}
 JOBS_LOCK = threading.Lock()
 
 
+def run_export_job(job_id: str, recipe, decay, size, index, images,
+                   target: Path):
+    """Écrit un tirage en tâche de fond, en disant où il en est.
+
+    Un tirage en grand format demande des dizaines de secondes, et un cadre
+    serré fait calculer une toile bien plus grande encore. Sans nouvelles,
+    l'attente passe pour un programme arrêté.
+    """
+    try:
+        toile, cadre, sortie = toile_pour(recipe, size)
+
+        def avance(fait, total):
+            with JOBS_LOCK:
+                JOBS[job_id].update(done=fait, total=total,
+                                    state=f"couche {fait} sur {total}")
+
+        with JOBS_LOCK:
+            JOBS[job_id].update(state="préparation", done=0,
+                                total=max(1, len(images)))
+        image = compose_at(recipe, decay, toile, index, images, avance=avance)
+
+        with JOBS_LOCK:
+            JOBS[job_id].update(state="écriture")
+        image = decouper(image, cadre, sortie)
+        save_with_recipe(image, target, recipe, rendered_at=sortie, moment=index,
+                         **decay_payload(decay))
+
+        with JOBS_LOCK:
+            JOBS[job_id].update(
+                state="fini", path=str(target), size=sortie,
+                centimetres=round(sortie / 300 * 2.54, 1),
+                rogne=sortie < size,
+            )
+        logger.info("tirage écrit : %s (%d px)", target, sortie)
+    except Exception as exc:  # noqa: BLE001 — l'échec appartient au travail
+        logger.warning("tirage échoué : %s", exc)
+        with JOBS_LOCK:
+            JOBS[job_id].update(state="échec", error=str(exc))
+
+
 def run_video_job(job_id: str, recipe, decay, size, images, target: Path):
     total = count_frames(decay)
 
@@ -620,14 +660,14 @@ class Handler(BaseHTTPRequestHandler):
         self._json(state or {"state": "inconnu"})
 
     def _export(self):
+        """Lance le tirage et rend la main : le suivi passe par /api/job."""
+        import uuid
+
         body = self._body()
+        size = int(body.get("size", 4000))
         recipe, images = recipe_from_request(body, self.library)
         decay = decay_from_request(body)
-        size = int(body.get("size", 4000))
         index = max(0, min(int(body.get("moment", 0)), count_frames(decay) - 1))
-        toile, cadre = toile_pour(recipe, size)
-        image = decouper(compose_at(recipe, decay, toile, index, images),
-                         cadre, size)
 
         self.output_dir.mkdir(parents=True, exist_ok=True)
         suffix = ".png" if body.get("format") == "png" else ".jpg"
@@ -635,17 +675,18 @@ class Handler(BaseHTTPRequestHandler):
         # distinguent sans avoir à ouvrir les fichiers.
         marque = "" if index == 0 else f"_t{index}"
         target = self.output_dir / f"atelier_{recipe.seed}{marque}_{size}{suffix}"
-        save_with_recipe(image, target, recipe, rendered_at=size, moment=index,
-                         **decay_payload(decay))
 
-        logger.info("tirage écrit : %s", target)
-        self._json({
-            "path": str(target),
-            "seed": recipe.seed,
-            "size": size,
-            "moment": index,
-            "centimetres": round(size / 300 * 2.54, 1),
-        })
+        job_id = uuid.uuid4().hex[:12]
+        with JOBS_LOCK:
+            JOBS[job_id] = {"state": "en attente", "done": 0,
+                            "total": max(1, len(images))}
+        threading.Thread(
+            target=run_export_job,
+            args=(job_id, recipe, decay, size, index, images, target),
+            daemon=True,
+        ).start()
+        self._json({"job": job_id, "seed": recipe.seed,
+                    "total": max(1, len(images))})
 
 
 DEFAULT_PORT = 8771

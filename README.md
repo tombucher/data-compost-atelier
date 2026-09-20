@@ -90,7 +90,9 @@ la bavure élargit la zone à trier. Pendant le calcul, une barre passe en haut
 de l'aperçu et le compteur s'affiche sous lui.
 
 Quand une composition tient, choisir un format et **Tirer**. Le fichier part
-dans `sorties/`, avec sa recette à l'intérieur.
+dans `sorties/`, avec sa recette à l'intérieur. Le calcul se fait en tâche de
+fond : une barre suit les couches, le compteur les secondes, et l'interface
+reste utilisable.
 
 Les vignettes des matières se recalculent quand la pile change, en une
 seconde environ. Elles montrent chaque matière seule et à force marquée : ce
@@ -240,7 +242,14 @@ Ce n'est pas un rognage. Rogner une image déjà rendue perdrait la définition
 qu'on vient de demander. Le cadre dit quelle part de la toile on garde, et la
 toile est alors calculée d'autant plus grande : un cadre de moitié sur un
 tirage de 4000 px fait calculer une toile de 8000, et la part gardée sort à
-4000 avec tout son détail. Un cadre serré coûte donc cher à tirer.
+4000 avec tout son détail.
+
+Un cadre serré coûte donc cher, et la toile est plafonnée à 10 000 px de
+côté. Une toile porte seize octets par pixel — un canvas en virgule
+flottante à trois canaux, plus sa carte de poids — si bien qu'un quart de
+cadre sur un tirage de 8000 px aurait demandé 32 000 px de côté, soit seize
+gigaoctets. Quand le plafond est atteint, le tirage sort plus petit que
+demandé et le dit.
 
 L'aperçu, lui, découpe sans agrandir la toile : la part gardée y perd du
 détail, mais le rendu reste assez vif pour qu'on travaille.

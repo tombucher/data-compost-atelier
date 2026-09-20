@@ -440,19 +440,37 @@ class TestTheOutputFrame:
     def test_the_canvas_grows_with_a_tighter_frame(self):
         from atelier.engine import toile_pour
         moitie = Recipe(sources=("a",), seed=1, crop=(0.25, 0.25, 0.5))
-        quart = Recipe(sources=("a",), seed=1, crop=(0.3, 0.3, 0.25))
         assert toile_pour(moitie, 4000)[0] == 8000
-        assert toile_pour(quart, 4000)[0] == 16000
         assert toile_pour(Recipe(sources=("a",), seed=1), 4000)[0] == 4000
+
+    def test_the_canvas_is_capped(self):
+        """Seize gigaoctets de toile, c'est une machine qui ne rend plus la main.
+
+        Une toile porte seize octets par pixel — un canvas en float32 à
+        trois canaux plus sa carte de poids. Un cadre serré sur un grand
+        tirage demandait 32000 px de côté, soit 16 Go, sans prévenir.
+        """
+        from atelier.engine import TOILE_MAX, toile_pour
+        serre = Recipe(sources=("a",), seed=1, crop=(0.4, 0.4, 0.25))
+        toile, _, sortie = toile_pour(serre, 8000)
+        assert toile == TOILE_MAX
+        assert sortie < 8000, "une sortie bridée doit s'annoncer plus petite"
+        assert toile * toile * 16 < 2e9, "la toile doit rester tenable"
+
+    def test_an_unbridled_frame_keeps_the_asked_size(self):
+        from atelier.engine import toile_pour
+        large = Recipe(sources=("a",), seed=1, crop=(0.2, 0.2, 0.6))
+        toile, _, sortie = toile_pour(large, 4000)
+        assert sortie == 4000, "sous le plafond, la taille demandée est tenue"
 
     def test_the_frame_comes_out_at_the_asked_size(self, photos):
         from atelier.engine import decouper, toile_pour
         chemins, images = photos
         recipe = Recipe(sources=tuple(chemins), seed=9, crop=(0.2, 0.2, 0.4),
                         effects=(Effect("halftone", 0.012),))
-        toile, cadre = toile_pour(recipe, 500)
-        sortie = decouper(render(recipe, size=toile, sources=images), cadre, 500)
-        assert sortie.shape == (500, 500, 3)
+        toile, cadre, taille = toile_pour(recipe, 500)
+        out = decouper(render(recipe, size=toile, sources=images), cadre, taille)
+        assert out.shape == (500, 500, 3)
 
     def test_the_frame_shows_the_right_part(self, photos):
         """La zone tirée doit être celle qu'on a désignée, pas une autre."""
@@ -463,8 +481,8 @@ class TestTheOutputFrame:
 
         recipe = Recipe(sources=tuple(chemins), seed=9, crop=(0.25, 0.25, 0.4),
                         effects=(Effect("halftone", 0.012),))
-        toile, cadre = toile_pour(recipe, 600)
-        sortie = decouper(render(recipe, size=toile, sources=images), cadre, 600)
+        toile, cadre, taille = toile_pour(recipe, 600)
+        sortie = decouper(render(recipe, size=toile, sources=images), cadre, taille)
 
         # La même zone, prise dans le rendu entier puis agrandie
         temoin = cv2.resize(entier[150:150 + 240, 150:150 + 240], (600, 600))
@@ -486,10 +504,10 @@ class TestTheOutputFrame:
         recipe = Recipe(sources=tuple(chemins), seed=9,
                         effects=(Effect("halftone", 0.012),))
         from atelier.engine import decouper, toile_pour
-        toile, cadre = toile_pour(recipe, 400)
-        assert cadre is None
+        toile, cadre, taille = toile_pour(recipe, 400)
+        assert cadre is None and taille == 400
         assert np.array_equal(
-            decouper(render(recipe, size=toile, sources=images), cadre, 400),
+            decouper(render(recipe, size=toile, sources=images), cadre, taille),
             render(recipe, size=400, sources=images),
         )
 

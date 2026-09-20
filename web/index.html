@@ -286,6 +286,16 @@
   .duo button.tenu { background: var(--braise); color: #1A1508; border-color: var(--braise); }
   .rangee { display: flex; gap: 5px; }
 
+  /* Un tirage en grand format demande des dizaines de secondes : sans
+     nouvelles, l'attente passe pour un programme arrêté. */
+  .jauge-travail {
+    height: 4px; background: var(--radicelle); border-radius: 2px;
+    overflow: hidden; margin: 8px 0 4px;
+  }
+  .jauge-travail .remplit {
+    height: 100%; width: 0; background: var(--ferment);
+    transition: width .25s ease;
+  }
   .resultat { font-size: 11px; color: var(--spore); line-height: 1.45; word-break: break-all; }
   .resultat.abouti { color: var(--ferment); }
 
@@ -497,6 +507,9 @@
       </div>
       <div class="rangee" style="margin-top:5px">
         <button id="tirer-video" style="flex:1">Tirer tout l'axe en vidéo</button>
+      </div>
+      <div class="jauge-travail" id="jauge-travail" hidden>
+        <div class="remplit" id="remplit"></div>
       </div>
       <p class="resultat" id="resultat"></p>
     </section>
@@ -983,6 +996,28 @@ async function rendre() {
 }
 
 // --- tirage -----------------------------------------------------------------
+// Suit une tâche jusqu'au bout en montrant où elle en est.
+async function suivre(job, bouton, mot) {
+  const jauge = $('#jauge-travail'), remplit = $('#remplit');
+  jauge.hidden = false;
+  const depart = performance.now();
+  try {
+    while (true) {
+      const t = await (await fetch('/api/job?id=' + job)).json();
+      if (t.state === 'fini') { remplit.style.width = '100%'; return t; }
+      if (t.state === 'échec') throw new Error(t.error);
+      const part = t.total ? Math.round(100 * (t.done || 0) / t.total) : 0;
+      remplit.style.width = Math.max(4, part) + '%';
+      bouton.textContent = `${mot} ${part} %`;
+      $('#resultat').textContent =
+        `${t.state} · ${((performance.now() - depart) / 1000).toFixed(0)} s`;
+      await new Promise(r => setTimeout(r, 400));
+    }
+  } finally {
+    setTimeout(() => { jauge.hidden = true; remplit.style.width = '0'; }, 600);
+  }
+}
+
 async function exporter() {
   if (!etat.choisies.length) return;
   const bouton = $('#exporter'), taille = parseInt($('#taille').value);
@@ -990,14 +1025,20 @@ async function exporter() {
   $('#resultat').textContent = ''; $('#resultat').className = 'resultat';
 
   try {
-    const r = await fetch('/api/export', {
+    const lance = await (await fetch('/api/export', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(corps({ size: taille, format: $('#format').value })),
-    });
-    const d = await r.json();
-    if (!r.ok) throw new Error(d.error);
+    })).json();
+    if (lance.error) throw new Error(lance.error);
+
+    const t = await suivre(lance.job, bouton, 'Calcul');
     $('#resultat').className = 'resultat abouti';
-    $('#resultat').textContent = `${d.centimetres} cm à 300 dpi → ${d.path}`;
+    // Un cadre serré fait buter la toile sur son plafond : la sortie est
+    // alors plus petite que demandé, et il vaut mieux le dire.
+    const rogne = t.rogne ? ` — le cadre a buté sur la toile maximale, `
+      + `${taille} px n'étaient pas atteignables` : '';
+    $('#resultat').textContent =
+      `${t.size} px · ${t.centimetres} cm à 300 dpi → ${t.path}${rogne}`;
     chargerTirages();
   } catch (e) {
     $('#resultat').textContent = e.message;
@@ -1023,20 +1064,9 @@ async function tirerVideo() {
     })).json();
     if (lance.error) throw new Error(lance.error);
 
-    // Le calcul dure des minutes : on suit son avancement
-    while (true) {
-      await new Promise(r => setTimeout(r, 1000));
-      const travail = await (await fetch('/api/job?id=' + lance.job)).json();
-      if (travail.state === 'fini') {
-        $('#resultat').className = 'resultat abouti';
-        $('#resultat').textContent = `${travail.written} images → ${travail.path}`;
-        break;
-      }
-      if (travail.state === 'échec') throw new Error(travail.error);
-      const part = Math.round(100 * (travail.done || 0) / (travail.total || 1));
-      bouton.textContent = `${part} %`;
-      $('#resultat').textContent = `${travail.done} / ${travail.total} images`;
-    }
+    const t = await suivre(lance.job, bouton, 'Séquence');
+    $('#resultat').className = 'resultat abouti';
+    $('#resultat').textContent = `${t.written} images → ${t.path}`;
   } catch (e) {
     $('#resultat').textContent = e.message;
   } finally {

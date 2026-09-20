@@ -160,7 +160,7 @@ def decompose_layer(
 
 def compose_at(
     recipe: Recipe, decay: Decay, size: int, index: int,
-    sources=None, fields=None,
+    sources=None, fields=None, avance=None,
 ) -> np.ndarray:
     """La composition à un instant de l'axe.
 
@@ -169,7 +169,9 @@ def compose_at(
     en pleine définition sans capture d'écran.
 
     `fields` évite de recalculer les cartes de saillance à chaque frame d'une
-    séquence ; `prepare_fields` les produit une fois pour toutes.
+    séquence ; `prepare_fields` les produit une fois pour toutes. `avance`,
+    appelée après chaque couche, permet de suivre un tirage qui dure : en
+    grand format, une couche demande plusieurs secondes.
     """
     images = sources if sources is not None else [load_source(p) for p in recipe.sources]
     if not images:
@@ -216,6 +218,8 @@ def compose_at(
 
         weight = saliency.astype(np.float32) / 255.0 * keep
         blend_into(canvas, weights, treated, weight, x, y)
+        if avance is not None:
+            avance(layer + 1, len(images))
 
     covered = weights > 1e-6
     canvas[covered] /= weights[covered][:, None]
