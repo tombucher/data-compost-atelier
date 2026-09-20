@@ -1,9 +1,11 @@
-"""Voie vidéo : une transition qui décompose une image pour en révéler une autre.
+"""Les matières du datamoshing : trier, déchirer, désaligner les canaux.
 
 Reprise de `datamoshing4.py`, qui a produit les vidéos de mars 2025 et, par
-capture d'écran, les 116 images de `export-vid_sauv/SCREENSHOT`.
+capture d'écran, les 116 images de `export-vid_sauv/SCREENSHOT`. Ce module
+n'en garde que les gestes ; le temps qui les enchaîne est dans `decay.py`,
+et ils servent aussi bien à une image fixe.
 
-Trois changements, les mêmes que pour la voie image.
+Trois changements, les mêmes que pour la composition.
 
 **Le hasard est retenu.** La méthode de tri et la direction du décalage RVB
 étaient tirées par le `random` global, sans graine : une séquence ne pouvait
@@ -26,41 +28,10 @@ en Python. C'est surtout la lisibilité qui y gagne.
 from __future__ import annotations
 
 import random
-from dataclasses import dataclass
-
 import cv2
 import numpy as np
 
-from atelier.engine import Recipe, SOURCE_SPAN, saliency_of
-
 SORT_METHODS = ("brightness", "hue", "saturation")
-
-
-@dataclass(frozen=True)
-class Motion:
-    """Ce qui ne concerne que la vidéo.
-
-    Les longueurs sont en fraction du côté de l'image : `min_segment` à 0.03
-    vaut 30 px sur 1024 et 90 px sur 3000, ce qui donne le même geste.
-    """
-
-    frames_per_transition: int = 24
-    fps: int = 24
-    min_segment: float = 0.03     # 30 px sur 1024, comme l'original au départ
-    max_segment: float = 0.10     # 100 px sur 1024
-    segment_growth: float = 1.5   # les segments s'allongent au fil de la transition
-    channel_shift: float = 0.015  # 15 px sur 1024
-    enhanced: bool = True         # canaux traités séparément, comme l'original
-    # Le tirage de méthodes de l'original, qui laisse le rouge intact.
-    # Voir sort_channels_separately(). À décocher pour trier les trois canaux.
-    channel_quirk: bool = True
-    # Trier l'image là où elle est visible, et non là où elle disparaît.
-    # L'original faisait l'inverse et son tri restait invisible ; voir
-    # transition(). Mettre False pour retrouver son comportement exact.
-    sort_visible: bool = True
-    # Répartir la dissolution sur les quantiles de la saillance plutôt que sur
-    # ses valeurs brutes. Voir mask_sequence(). False retrouve l'original.
-    even_dissolve: bool = True
 
 
 def sort_key(image: np.ndarray, method: str) -> np.ndarray:
@@ -154,6 +125,8 @@ def sort_channels_separately(
     rng: random.Random,
     flips: np.random.Generator | None = None,
     quirk: bool = True,
+    minimum: int | None = None,
+    maximum: int | None = None,
 ) -> np.ndarray:
     """Trie chaque canal séparément : c'est de là que vient la séparation colorée.
 
@@ -167,18 +140,27 @@ def sort_channels_separately(
     nulles. Comme le rouge ne tirait qu'entre « saturation » et « teinte », il
     n'était **jamais** trié, et le vert et le bleu une fois sur deux. C'est
     cette asymétrie qui sépare les couleurs. `quirk=False` trie les trois.
+
+    Sans `minimum`/`maximum`, les longueurs de l'original s'appliquent. Avec,
+    elles se règlent — mais les rapports entre canaux sont conservés, car
+    c'est leur écart qui fait la séparation, pas leur valeur absolue.
     """
     blue, green, red = cv2.split(image)
 
     # Longueurs relatives à la taille, comme partout ailleurs. Les valeurs de
-    # l'original (20-50, 30-80, 40-100) étaient calibrées pour du 1024.
-    def span(low, high, ceiling):
-        lo = max(2, int(rng.randint(low, high) * side / 1024))
-        return lo, max(lo + 1, int(ceiling * side / 1024))
+    # l'original (20-50, 30-80, 40-100) étaient calibrées pour du 1024 ; les
+    # rapports 0,7 / 1 / 1,4 en gardent l'écart quand on règle soi-même.
+    def span(low, high, ceiling, ratio):
+        if minimum is None:
+            lo = max(2, int(rng.randint(low, high) * side / 1024))
+            return lo, max(lo + 1, int(ceiling * side / 1024))
+        rng.random()   # même nombre de tirages dans les deux branches
+        lo = max(2, int(minimum * ratio))
+        return lo, max(lo + 1, int((maximum or minimum * 3) * ratio))
 
-    blue_min, blue_max = span(20, 50, 150)
-    green_min, green_max = span(30, 80, 180)
-    red_min, red_max = span(40, 100, 200)
+    blue_min, blue_max = span(20, 50, 150, 0.7)
+    green_min, green_max = span(30, 80, 180, 1.0)
+    red_min, red_max = span(40, 100, 200, 1.4)
 
     if quirk:
         blue_method = rng.choice(("brightness", "hue"))
@@ -231,47 +213,59 @@ def mask_sequence(saliency: np.ndarray, frames: int,
     retire une part comparable, et la dissolution occupe toute la séquence.
     `even=False` retrouve le comportement d'origine.
     """
+    field, even = dissolve_field(saliency, even)
+    steps = np.power(np.linspace(0.0, 1.0, max(frames, 2)), DWELL)
+    thresholds = np.asarray(
+        np.quantile(field, steps) if even else steps, dtype=np.float64
+    )
+    # Le dernier masque doit être vide, pour que la seconde image arrive
+    # entièrement quelle que soit la distribution.
+    thresholds[-1] = float(field.max()) + 1e-6
+    return [(field >= t).astype(np.float32) for t in thresholds]
+
+
+# Exposant appliqué à l'avancement avant d'en tirer un seuil : on s'attarde
+# sur le milieu de la dissolution, là où se joue la décomposition.
+DWELL = 0.8
+
+
+def dissolve_field(saliency: np.ndarray, even: bool = True):
+    """Prépare la carte sur laquelle la dissolution va mordre.
+
+    Une carte sans relief — image unie, scan de papier blanc — rendrait tous
+    les quantiles égaux, et rien ne se dissoudrait jamais. On se rabat alors
+    sur un balayage spatial, qui donne au moins un mouvement. Le second
+    renvoi dit si la répartition par quantiles reste applicable.
+    """
     field = saliency.astype(np.float32)
     if field.max() > 1.0:
         field = field / 255.0
     field = cv2.GaussianBlur(field, (15, 15), 0)
 
-    # Une carte sans relief — image unie, scan de papier blanc — rendrait
-    # tous les quantiles égaux, et l'image ne se dissoudrait jamais : la
-    # seconde n'arriverait pas. On se rabat alors sur un balayage spatial,
-    # qui donne au moins une transition.
     if float(field.max() - field.min()) < 1e-3:
         width = field.shape[1]
-        field = np.tile(np.linspace(1.0, 0.0, width, dtype=np.float32), (field.shape[0], 1))
+        field = np.tile(
+            np.linspace(1.0, 0.0, width, dtype=np.float32), (field.shape[0], 1)
+        )
         even = False
-
-    # Exposant 0.8 : on s'attarde sur le milieu de la dissolution, là où se
-    # joue la décomposition.
-    steps = np.power(np.linspace(0.0, 1.0, max(frames, 2)), 0.8)
-    thresholds = np.quantile(field, steps) if even else steps
-    # Le dernier masque doit être vide, pour que la seconde image arrive
-    # entièrement quelle que soit la distribution.
-    thresholds = np.asarray(thresholds, dtype=np.float64)
-    thresholds[-1] = float(field.max()) + 1e-6
-    return [(field >= t).astype(np.float32) for t in thresholds]
+    return field, even
 
 
-def transition_masks(first, second, frames, even: bool = True):
-    """Les deux séquences de masques d'une transition.
+def retention_at(field: np.ndarray, progress: float, even: bool = True) -> np.ndarray:
+    """Ce qui reste d'une image à un avancement donné, entre 0 et 1.
 
-    La première image se retire par seuils croissants ; la seconde reste
-    absente le premier tiers puis se révèle de la même manière.
+    À 0 tout est gardé, à 1 il ne reste rien. Contrairement à
+    `mask_sequence`, un seul instant est calculé : c'est ce qui permet de se
+    déplacer dans le temps sans rejouer la séquence depuis le début.
+
+    `field` est la carte préparée par `dissolve_field`, qui dit aussi si la
+    répartition par quantiles reste applicable.
     """
-    blur = (31, 31)
-    masks_first = mask_sequence(
-        cv2.GaussianBlur(saliency_of(first), blur, 0), frames, even
-    )
-    late = max(2 * frames // 3, 1)
-    masks_second = [np.zeros(second.shape[:2], np.float32)] * (frames - late)
-    masks_second += mask_sequence(
-        cv2.GaussianBlur(saliency_of(second), blur, 0), late, even
-    )
-    return masks_first, masks_second[:frames], late
+    step = float(np.clip(progress, 0.0, 1.0)) ** DWELL
+    if step >= 1.0:
+        return np.zeros(field.shape, dtype=np.float32)
+    threshold = float(np.quantile(field, step)) if even else step
+    return (field >= threshold).astype(np.float32)
 
 
 def frame_draw(seed: int, pair: int, index: int):
@@ -287,165 +281,6 @@ def frame_draw(seed: int, pair: int, index: int):
         random.Random(f"{seed}:{pair}:{index}"),
         np.random.default_rng([int(seed), int(pair), int(index)]),
     )
-
-
-def transition(
-    first: np.ndarray,
-    second: np.ndarray,
-    motion: Motion,
-    recipe: Recipe,
-    pair: int = 0,
-):
-    """Engendre les frames d'une transition entre deux images de même taille."""
-    frames = max(2, motion.frames_per_transition)
-    side = max(first.shape[:2])
-    masks_first, masks_second, late = transition_masks(
-        first, second, frames, motion.even_dissolve
-    )
-
-    for index in range(frames):
-        yield _one_frame(first, second, masks_first[index], masks_second[index],
-                         index, frames, late, side, motion, recipe.seed, pair,
-                         recipe)
-
-
-def _one_frame(first, second, keep, reveal, index, frames, late, side,
-               motion, seed, pair, recipe=None):
-    """Une frame, calculable indépendamment des autres.
-
-    Les matières de la voie image — trame, bitmap, pixellisation, saturation —
-    s'appliquent aussi ici, chacune avec le réglage propre de son image. Rien
-    n'obligeait à séparer les deux voies.
-    """
-    if True:
-        rng, flips = frame_draw(seed, pair, index)
-        progress = index / (frames - 1)
-
-        # Les segments s'allongent à mesure que l'image se défait
-        grow = 1.0 + motion.segment_growth * progress
-        minimum = max(2, int(motion.min_segment * side * grow))
-        maximum = max(minimum + 1, int(motion.max_segment * side * grow))
-
-        vertical = index < frames / 2
-        method = rng.choice(SORT_METHODS)
-
-        # L'original triait l'image 1 sur `keep < 0.5`, puis la composait
-        # avec le poids `keep` : les deux zones étant complémentaires, le tri
-        # tombait exactement là où l'image n'est pas affichée et ne se voyait
-        # jamais. Son propre commentaire annonçait pourtant une image « qui
-        # reste visible et se dégrade ». On trie donc ce qu'on montre.
-        zone_first = keep > 0.5 if motion.sort_visible else keep < 0.5
-        if motion.enhanced:
-            undone = sort_channels_separately(
-                first, zone_first, vertical, side, rng, flips, motion.channel_quirk
-            )
-        else:
-            undone = pixel_sort(
-                first, zone_first, method, vertical, minimum, maximum, flips
-            )
-        shift = int(motion.channel_shift * side * progress)
-        undone = shift_channels(undone, shift, rng)
-
-        if index >= frames - late:
-            # L'image 2 n'est montrée que là où l'image 1 s'est retirée :
-            # c'est cette part-là qu'il faut travailler.
-            zone_second = (reveal > 0.5) & (keep < 0.5) if motion.sort_visible \
-                else reveal > 0.5
-            if motion.enhanced:
-                revealed = sort_channels_separately(
-                    second, zone_second, not vertical, side, rng, flips,
-                    motion.channel_quirk,
-                )
-            else:
-                revealed = pixel_sort(
-                    second, zone_second, method, not vertical,
-                    max(2, minimum // 2), max(3, maximum // 2), flips,
-                )
-        else:
-            revealed = second
-
-        blend = keep[:, :, None]
-        composed = (revealed * (1.0 - blend) + undone * blend).astype(np.uint8)
-
-        if recipe is not None:
-            from atelier.engine import apply_effects, effects_for, saliency_of
-
-            matieres = effects_for(recipe, pair)
-            if matieres:
-                composed = apply_effects(
-                    composed, saliency_of(composed), recipe, side, matieres
-                )
-        return composed
-
-
-def render_sequence(recipe: Recipe, motion: Motion, size: int, sources=None):
-    """Enchaîne les transitions entre images successives.
-
-    Les images sont cadrées comme dans la voie image, pour qu'une vidéo et une
-    composition nées de la même recette restent parentes.
-    """
-    framed = frame_canvases(recipe, size, sources)
-    if len(framed) < 2:
-        raise ValueError("il faut au moins deux images pour une transition")
-
-    for pair, (first, second) in enumerate(zip(framed, framed[1:])):
-        yield from transition(first, second, motion, recipe, pair)
-
-
-def frame_canvases(recipe: Recipe, size: int, sources=None) -> list[np.ndarray]:
-    """Les images sources, cadrées au carré comme dans la voie image."""
-    from atelier.engine import load_source
-
-    images = sources if sources is not None else [load_source(p) for p in recipe.sources]
-    # La toile fait exactement la taille demandée ; l'image y occupe la même
-    # part que dans la voie image, centrée. Demander 4000 doit donner 4000.
-    span = max(1, int(round(SOURCE_SPAN * size)))
-    framed = []
-    for image in images:
-        height, width = image.shape[:2]
-        scale = span / max(height, width)
-        resized = cv2.resize(
-            image, (max(1, int(width * scale)), max(1, int(height * scale))),
-            interpolation=cv2.INTER_AREA,
-        )
-        canvas = np.zeros((size, size, 3), np.uint8)
-        y = (size - resized.shape[0]) // 2
-        x = (size - resized.shape[1]) // 2
-        canvas[y:y + resized.shape[0], x:x + resized.shape[1]] = resized
-        framed.append(canvas)
-    return framed
-
-
-def render_frame(recipe: Recipe, motion: Motion, size: int, index: int,
-                 sources=None) -> np.ndarray:
-    """Rend une seule frame de la séquence, sans calculer les précédentes.
-
-    C'est ce qui remplace la capture d'écran : on parcourt la séquence, on
-    s'arrête sur l'instant voulu, et on l'exporte à la taille du tirage. La
-    capture manuelle plafonnait à la définition de l'écran.
-    """
-    framed = frame_canvases(recipe, size, sources)
-    if len(framed) < 2:
-        raise ValueError("il faut au moins deux images pour une transition")
-
-    per_pair = max(2, motion.frames_per_transition)
-    total = (len(framed) - 1) * per_pair
-    index = max(0, min(int(index), total - 1))
-    pair, local = divmod(index, per_pair)
-
-    first, second = framed[pair], framed[pair + 1]
-    masks_first, masks_second, late = transition_masks(
-        first, second, per_pair, motion.even_dissolve
-    )
-    return _one_frame(
-        first, second, masks_first[local], masks_second[local],
-        local, per_pair, late, max(first.shape[:2]), motion, recipe.seed, pair,
-        recipe,
-    )
-
-
-def count_frames(recipe: Recipe, motion: Motion) -> int:
-    return max(0, len(recipe.sources) - 1) * max(2, motion.frames_per_transition)
 
 
 def write_video(frames, path, fps: int = 24) -> int:

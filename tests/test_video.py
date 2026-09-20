@@ -2,6 +2,9 @@
 
 Comme pour la trame, l'implémentation d'origine est recopiée ici et sert de
 juge. Sans elle, « vectorisé » serait une promesse.
+
+Ce fichier ne couvre que les gestes : trier, décaler, dissoudre. Le temps qui
+les enchaîne est éprouvé dans `test_decay.py`.
 """
 import random
 
@@ -9,16 +12,7 @@ import cv2
 import numpy as np
 import pytest
 
-from atelier.engine import Recipe
-from atelier.video import (
-    Motion,
-    count_frames,
-    mask_sequence,
-    pixel_sort,
-    render_sequence,
-    shift_channels,
-    write_video,
-)
+from atelier.video import mask_sequence, pixel_sort, shift_channels, write_video
 
 
 # --- implémentation d'origine, recopiée de datamoshing4.py -----------------
@@ -163,52 +157,6 @@ class TestSeeded:
         assert np.array_equal(shift_channels(photo, 0, random.Random(1)), photo)
 
 
-class TestSequence:
-    @pytest.fixture
-    def sources(self):
-        def disc(colour):
-            image = np.zeros((300, 240, 3), np.uint8)
-            cv2.circle(image, (120, 150), 90, colour, -1)
-            return image
-        return [disc((30, 60, 220)), disc((220, 90, 40)), disc((60, 210, 90))]
-
-    def test_frame_count(self, sources):
-        recipe = Recipe(sources=("a", "b", "c"), seed=1)
-        motion = Motion(frames_per_transition=6)
-        frames = list(render_sequence(recipe, motion, 128, sources))
-        assert len(frames) == count_frames(recipe, motion) == 12
-
-    def test_frames_are_square_and_sized(self, sources):
-        recipe = Recipe(sources=("a", "b"), seed=1)
-        frames = list(render_sequence(recipe, Motion(frames_per_transition=4),
-                                      160, sources[:2]))
-        assert all(f.shape == frames[0].shape for f in frames)
-        assert frames[0].shape[2] == 3
-
-    def test_a_sequence_replays_identically(self, sources):
-        recipe = Recipe(sources=("a", "b"), seed=77)
-        motion = Motion(frames_per_transition=4)
-        first = list(render_sequence(recipe, motion, 128, sources[:2]))
-        again = list(render_sequence(recipe, motion, 128, sources[:2]))
-        assert all(np.array_equal(a, b) for a, b in zip(first, again))
-
-    def test_two_seeds_diverge(self, sources):
-        motion = Motion(frames_per_transition=4)
-        a = list(render_sequence(Recipe(sources=("a", "b"), seed=1), motion, 128, sources[:2]))
-        b = list(render_sequence(Recipe(sources=("a", "b"), seed=2), motion, 128, sources[:2]))
-        assert not all(np.array_equal(x, y) for x, y in zip(a, b))
-
-    def test_one_image_is_refused(self, sources):
-        with pytest.raises(ValueError):
-            list(render_sequence(Recipe(sources=("a",), seed=1), Motion(), 128, sources[:1]))
-
-    def test_the_sequence_actually_moves(self, sources):
-        """Une transition doit transformer, pas répéter la même image."""
-        frames = list(render_sequence(Recipe(sources=("a", "b"), seed=9),
-                                      Motion(frames_per_transition=8), 160, sources[:2]))
-        assert not np.array_equal(frames[0], frames[-1])
-
-
 class TestWriting:
     def test_writes_a_playable_file(self, tmp_path):
         frames = [np.full((64, 64, 3), v, np.uint8) for v in (20, 90, 160, 230)]
@@ -231,46 +179,6 @@ class TestMasks:
         masks = mask_sequence(field, 5)
         assert len(masks) == 5
         assert masks[0].mean() > masks[-1].mean(), "le masque doit se refermer"
-
-
-class TestSingleFrame:
-    """Naviguer dans une séquence sans la rejouer depuis le début."""
-
-    @pytest.fixture
-    def sources(self):
-        def disc(colour):
-            image = np.zeros((300, 240, 3), np.uint8)
-            cv2.circle(image, (120, 150), 90, colour, -1)
-            return image
-        return [disc((30, 60, 220)), disc((220, 90, 40)), disc((60, 210, 90))]
-
-    def test_matches_the_full_sequence(self, sources):
-        from atelier.video import render_frame
-        recipe = Recipe(sources=("a", "b", "c"), seed=42)
-        motion = Motion(frames_per_transition=5)
-        whole = list(render_sequence(recipe, motion, 128, sources))
-        for index in (0, 3, 5, 9):
-            alone = render_frame(recipe, motion, 128, index, sources)
-            assert np.array_equal(alone, whole[index]), f"frame {index}"
-
-    def test_index_is_clamped(self, sources):
-        from atelier.video import render_frame
-        recipe = Recipe(sources=("a", "b"), seed=1)
-        motion = Motion(frames_per_transition=4)
-        assert render_frame(recipe, motion, 96, 999, sources[:2]).shape[0] > 0
-        assert render_frame(recipe, motion, 96, -5, sources[:2]).shape[0] > 0
-
-    def test_same_frame_at_two_sizes_keeps_the_moment(self, sources):
-        """Sortir une frame en grand, c'est tout l'intérêt."""
-        from atelier.video import render_frame
-        recipe = Recipe(sources=("a", "b"), seed=8)
-        motion = Motion(frames_per_transition=6)
-        small = render_frame(recipe, motion, 200, 3, sources[:2])
-        large = render_frame(recipe, motion, 600, 3, sources[:2])
-        assert (small.shape[0], large.shape[0]) == (200, 600), "la taille demandée est la taille rendue"
-        a = cv2.resize(small, (100, 100), interpolation=cv2.INTER_AREA).astype(float)
-        b = cv2.resize(large, (100, 100), interpolation=cv2.INTER_AREA).astype(float)
-        assert np.mean(np.abs(a - b)) < 40, "le même instant doit se reconnaître"
 
 
 class TestDissolve:
@@ -323,25 +231,3 @@ class TestDissolve:
         assert all(b <= a + 1e-6 for a, b in zip(parts, parts[1:]))
 
 
-class TestSortedRegionIsVisible:
-    """Trier ce qu'on n'affiche pas ne se voit pas."""
-
-    @pytest.fixture
-    def pair(self):
-        def disc(colour):
-            image = np.zeros((240, 240, 3), np.uint8)
-            cv2.circle(image, (120, 120), 80, colour, -1)
-            return image
-        return [disc((40, 70, 210)), disc((210, 90, 50))]
-
-    def test_visible_sorting_changes_more_than_the_original(self, pair):
-        from atelier.video import render_frame
-        recipe = Recipe(sources=("a", "b"), seed=31)
-        index = 14
-
-        ancien = render_frame(recipe, Motion(frames_per_transition=24,
-                                             sort_visible=False), 240, index, pair)
-        nouveau = render_frame(recipe, Motion(frames_per_transition=24,
-                                              sort_visible=True), 240, index, pair)
-        assert not np.array_equal(ancien, nouveau), \
-            "trier la zone visible doit changer l'image"

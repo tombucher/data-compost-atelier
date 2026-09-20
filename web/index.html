@@ -106,6 +106,16 @@
   }
   .vide { color: var(--discret); text-align: center; max-width: 320px; }
 
+  /* L'axe du temps : la décomposition se parcourt, elle ne se règle pas
+     dans un panneau latéral. */
+  .axe { width: 100%; max-width: 640px; }
+  .axe input[type=range] { width: 100%; }
+  .axe-legende {
+    display: flex; justify-content: space-between;
+    font-size: 11px; color: var(--discret); margin-top: 2px;
+    font-variant-numeric: tabular-nums;
+  }
+
   /* --- réglages --- */
   .effet { margin-bottom: 14px; }
   .ligne { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
@@ -143,7 +153,8 @@
 
 <aside>
   <h1>Atelier</h1>
-  <select id="dossier" title="Changer de série"></select>
+  <h2>Dossier des images</h2>
+  <select id="dossier" title="Où l'atelier prend ses images"></select>
   <div class="racine" id="racine">…</div>
   <h2>Images</h2>
   <div id="sources"></div>
@@ -155,15 +166,18 @@
 <main>
   <img id="apercu" alt="aperçu" hidden>
   <div class="vide" id="vide">Choisissez au moins une image à gauche.</div>
+  <div class="axe" id="axe" hidden>
+    <input type="range" id="temps" min="0" max="47" step="1" value="0">
+    <div class="axe-legende">
+      <span>intact</span>
+      <span id="v-temps">1 / 48</span>
+      <span>composté</span>
+    </div>
+  </div>
   <div class="etat" id="etat"></div>
 </main>
 
 <aside>
-  <div class="modes">
-    <button class="mode actif" data-mode="image">Image</button>
-    <button class="mode" data-mode="video">Vidéo</button>
-  </div>
-
   <div class="rangee" style="margin-bottom:6px">
     <button class="principal" id="hasard" style="flex:1">Au hasard</button>
     <select id="famille" style="width:auto" title="Dans quelle veine tirer">
@@ -196,17 +210,39 @@
     <input type="range" id="bords" min="0" max="15" step="1" value="0">
   </div>
 
-  <div id="bloc-video" hidden>
-    <h2>Mouvement</h2>
-    <div class="effet">
-      <div class="ligne"><label for="frames">Images par transition</label><span class="valeur" id="v-frames"></span></div>
-      <input type="range" id="frames" min="6" max="60" step="2" value="24">
-    </div>
-    <div class="effet">
-      <div class="ligne"><label for="position">Position</label><span class="valeur" id="v-position"></span></div>
-      <input type="range" id="position" min="0" max="23" step="1" value="0">
-      <div class="note">Parcourez la séquence et arrêtez-vous sur l'instant voulu. Il se tire en pleine définition, sans capture d'écran.</div>
-    </div>
+  <h2>Décomposition</h2>
+  <div class="effet">
+    <div class="ligne"><label for="frames">Durée</label><span class="valeur" id="v-frames"></span></div>
+    <input type="range" id="frames" min="8" max="240" step="4" value="48">
+  </div>
+  <div class="effet">
+    <div class="ligne"><label for="stagger">Décalage entre couches</label><span class="valeur" id="v-stagger"></span></div>
+    <input type="range" id="stagger" min="0" max="1" step="0.05" value="0.45">
+    <div class="note">À zéro toutes les images pourrissent ensemble. Au maximum elles s'effacent l'une après l'autre.</div>
+  </div>
+  <div class="effet">
+    <div class="ligne"><label for="residue">Ce qui résiste</label><span class="valeur" id="v-residue"></span></div>
+    <input type="range" id="residue" min="0" max="0.6" step="0.02" value="0.12">
+    <div class="note">La part la plus dense de chaque image, encore là à la fin. À zéro, la séquence s'éteint au noir.</div>
+  </div>
+
+  <h2>Déchirure</h2>
+  <div class="effet">
+    <div class="ligne"><label for="min_segment">Segment le plus court</label><span class="valeur" id="v-min_segment"></span></div>
+    <input type="range" id="min_segment" min="0.004" max="0.2" step="0.002" value="0.03">
+  </div>
+  <div class="effet">
+    <div class="ligne"><label for="max_segment">Segment le plus long</label><span class="valeur" id="v-max_segment"></span></div>
+    <input type="range" id="max_segment" min="0.01" max="0.5" step="0.005" value="0.10">
+  </div>
+  <div class="effet">
+    <div class="ligne"><label for="segment_growth">Allongement</label><span class="valeur" id="v-segment_growth"></span></div>
+    <input type="range" id="segment_growth" min="0" max="5" step="0.1" value="1.5">
+    <div class="note">De combien les segments s'étirent à mesure que l'image se défait.</div>
+  </div>
+  <div class="effet">
+    <div class="ligne"><label for="channel_shift">Décalage RVB</label><span class="valeur" id="v-channel_shift"></span></div>
+    <input type="range" id="channel_shift" min="0" max="0.1" step="0.002" value="0.015">
   </div>
 
   <h2>Tirage</h2>
@@ -228,12 +264,13 @@
     </select>
   </div>
   <div class="rangee">
-    <button class="principal" id="exporter" style="flex:1">Tirer</button>
+    <button class="principal" id="exporter" style="flex:1">Tirer cet instant</button>
     <select id="format" style="width:auto"><option value="jpg">JPEG</option><option value="png">PNG</option></select>
   </div>
-  <div class="rangee" id="bloc-bouton-video" hidden style="margin-top:6px">
-    <button id="tirer-video" style="flex:1">Tirer la séquence</button>
+  <div class="rangee" style="margin-top:6px">
+    <button id="tirer-video" style="flex:1">Tirer tout l'axe en vidéo</button>
   </div>
+  <div class="note">Une image prélève l'instant où vous êtes sur l'axe. Une vidéo parcourt tout l'axe, de l'intact au composté.</div>
   <div class="note" id="resultat"></div>
 
   <h2>Fidélité</h2>
@@ -242,6 +279,26 @@
     <label for="debordement">Débordement de saturation</label>
   </div>
   <div class="note">Le dépassement d'origine, qui casse les couleurs au-delà de 255. Seize œuvres de 2024 en dépendent.</div>
+  <div class="ligne" style="margin-top:12px">
+    <input type="checkbox" id="enhanced" checked>
+    <label for="enhanced">Trier les canaux séparément</label>
+  </div>
+  <div class="note">D'où vient la séparation colorée. Décoché, les trois canaux se trient ensemble.</div>
+  <div class="ligne" style="margin-top:12px">
+    <input type="checkbox" id="channel_quirk" checked>
+    <label for="channel_quirk">Laisser le rouge intact</label>
+  </div>
+  <div class="note">Un accident de l'original : le canal rouge n'était jamais réellement trié. C'est ce qui fait sa dominante.</div>
+  <div class="ligne" style="margin-top:12px">
+    <input type="checkbox" id="sort_visible" checked>
+    <label for="sort_visible">Trier ce qu'on voit</label>
+  </div>
+  <div class="note">L'original triait la zone en train de disparaître : son tri ne se voyait jamais. Décoché, on retrouve ce comportement.</div>
+  <div class="ligne" style="margin-top:12px">
+    <input type="checkbox" id="even_dissolve" checked>
+    <label for="even_dissolve">Dissolution régulière</label>
+  </div>
+  <div class="note">Les seuils suivent les quantiles de la saillance. Décoché, l'image se vide en deux images comme à l'origine.</div>
 </aside>
 
 <script>
@@ -260,8 +317,14 @@ function reglagesNeufs() {
   return Object.fromEntries(EFFETS.map(e => [e.cle, { actif:false, force:e.defaut }]));
 }
 
+// Les réglages de l'axe, tels que le serveur les attend. Curseurs et cases
+// portent le même nom : la requête se construit sans table de correspondance.
+const AXE = ['frames', 'stagger', 'residue', 'min_segment', 'max_segment',
+             'segment_growth', 'channel_shift'];
+const BASCULES = ['enhanced', 'channel_quirk', 'sort_visible', 'even_dissolve'];
+
 const etat = {
-  mode: 'image', totalFrames: 0,
+  totalFrames: 48,
   disponibles: [], choisies: [],
   effets: reglagesNeufs(),   // réglage commun
   propres: {},               // réglages propres, par chemin d'image
@@ -339,10 +402,20 @@ function poserSources(d) {
   $('#racine').textContent = d.root;
   etat.disponibles = d.images;
 
+  // Le menu liste le dossier courant puis ceux d'à côté qui contiennent des
+  // images. Le dossier des tirages en fait partie — on peut recomposter ses
+  // propres sorties — mais il faut dire lequel c'est.
   const voisins = d.neighbours || [];
+  const nom = v => v.path === d.output ? `${v.name} — vos tirages` : v.name;
   $('#dossier').innerHTML =
-    `<option value="${d.root}">${d.root.split('/').pop()} (${d.images.length})</option>` +
-    voisins.map(v => `<option value="${v.path}">${v.name} (${v.count})</option>`).join('');
+    `<optgroup label="dossier en cours">`
+    + `<option value="${d.root}">${d.root.split('/').pop()} (${d.images.length})</option>`
+    + `</optgroup>`
+    + (voisins.length
+       ? `<optgroup label="dossiers voisins">`
+         + voisins.map(v => `<option value="${v.path}">${nom(v)} (${v.count})</option>`).join('')
+         + `</optgroup>`
+       : '');
   $('#dossier').value = d.root;
 
   if (!d.images.length) {
@@ -446,6 +519,14 @@ function appliquer(r) {
   (r.per_image || []).forEach((groupe, i) => {
     if (groupe !== null && r.sources[i]) etat.propres[r.sources[i]] = versReglages(groupe);
   });
+  // L'axe et l'instant ne voyagent que si l'image les portait
+  AXE.forEach(cle => { if (r[cle] !== undefined) $('#' + cle).value = r[cle]; });
+  BASCULES.forEach(cle => { if (r[cle] !== undefined) $('#' + cle).checked = r[cle]; });
+  if (r.frames !== undefined) ajusterAxe(Math.round(r.frames));
+  if (r.moment !== undefined) $('#temps').value = Math.min(r.moment, etat.totalFrames - 1);
+  montrerTemps();
+  montrerAxe();
+
   etat.cible = '';
   peindreChoix();
   rendre();
@@ -468,8 +549,10 @@ function corps(extra = {}) {
     smoothness: parseFloat($('#lissage').value),
     edge_blur: parseInt($('#bords').value),
     overflow: $('#debordement').checked,
-    frames: parseInt($('#frames').value),
+    moment: parseInt($('#temps').value),
     fps: 24,
+    ...Object.fromEntries(AXE.map(c => [c, parseFloat($('#' + c).value)])),
+    ...Object.fromEntries(BASCULES.map(c => [c, $('#' + c).checked])),
     ...extra,
   };
 }
@@ -481,7 +564,8 @@ function demanderRendu() {
 
 async function rendre() {
   if (!etat.choisies.length) {
-    $('#apercu').hidden = true; $('#vide').hidden = false; $('#etat').textContent = '';
+    $('#apercu').hidden = true; $('#vide').hidden = false;
+    $('#axe').hidden = true; $('#etat').textContent = '';
     return;
   }
   if (enCours) { aRefaire = true; return; }   // une seule requête à la fois
@@ -490,36 +574,27 @@ async function rendre() {
 
   const depart = performance.now();
   try {
-    const enVideo = etat.mode === 'video';
-    const r = await fetch(enVideo ? '/api/frame' : '/api/render', {
+    const r = await fetch('/api/render', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(enVideo ? corps({ frame: parseInt($('#position').value) }) : corps()),
+      body: JSON.stringify(corps()),
     });
     if (!r.ok) throw new Error((await r.json()).error || 'échec du rendu');
 
-    const total = parseInt(r.headers.get('X-Atelier-Frames') || '0');
-    if (enVideo && total && total !== etat.totalFrames) {
-      // Le curseur de position doit couvrir la séquence entière
-      etat.totalFrames = total;
-      const curseur = $('#position');
-      curseur.max = total - 1;
-      if (parseInt(curseur.value) > total - 1) curseur.value = total - 1;
-      $('#v-position').textContent = `${parseInt(curseur.value) + 1} / ${total}`;
-    }
-
+    ajusterAxe(parseInt(r.headers.get('X-Atelier-Frames') || '0'));
     const graine = r.headers.get('X-Atelier-Seed');
     if (graine && !$('#graine').value) $('#graine').value = graine;
 
     const image = URL.createObjectURL(await r.blob());
     const vue = $('#apercu');
     if (vue.src) URL.revokeObjectURL(vue.src);
-    vue.src = image; vue.hidden = false; $('#vide').hidden = true;
+    vue.src = image; vue.hidden = false;
+    $('#vide').hidden = true; $('#axe').hidden = false;
 
-    const position = etat.mode === 'video' && etat.totalFrames
-      ? ` · image ${parseInt($('#position').value) + 1}/${etat.totalFrames}` : '';
+    const instant = parseInt($('#temps').value);
     $('#etat').textContent =
       `${etat.choisies.length} image${etat.choisies.length > 1 ? 's' : ''} · `
-      + `graine ${graine}${position} · ${Math.round(performance.now() - depart)} ms`;
+      + `graine ${graine} · instant ${instant + 1}/${etat.totalFrames}`
+      + ` · ${Math.round(performance.now() - depart)} ms`;
   } catch (e) {
     $('#etat').textContent = e.message;
   } finally {
@@ -539,12 +614,9 @@ async function exporter() {
   $('#resultat').className = 'note';
 
   try {
-    const enVideo = etat.mode === 'video';
-    const r = await fetch(enVideo ? '/api/frame' : '/api/export', {
+    const r = await fetch('/api/export', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(enVideo
-        ? corps({ size: taille, frame: parseInt($('#position').value), save: true })
-        : corps({ size: taille, format: $('#format').value })),
+      body: JSON.stringify(corps({ size: taille, format: $('#format').value })),
     });
     const d = await r.json();
     if (!r.ok) throw new Error(d.error);
@@ -555,7 +627,7 @@ async function exporter() {
     $('#resultat').textContent = e.message;
   } finally {
     bouton.disabled = false;
-    bouton.textContent = 'Tirer';
+    bouton.textContent = 'Tirer cet instant';
   }
 }
 
@@ -594,18 +666,22 @@ async function tirerVideo() {
     $('#resultat').textContent = e.message;
   } finally {
     bouton.disabled = false;
-    bouton.textContent = 'Tirer la séquence';
+    bouton.textContent = "Tirer tout l'axe en vidéo";
   }
 }
 
-function basculer(mode) {
-  etat.mode = mode;
-  document.querySelectorAll('.mode').forEach(b =>
-    b.classList.toggle('actif', b.dataset.mode === mode));
-  $('#bloc-video').hidden = mode !== 'video';
-  $('#bloc-bouton-video').hidden = mode !== 'video';
-  $('#exporter').textContent = mode === 'video' ? 'Tirer cette image' : 'Tirer';
-  rendre();
+// L'axe garde la longueur réglée ; la position suit si elle la dépasse.
+function ajusterAxe(total) {
+  if (!total || total === etat.totalFrames) return;
+  etat.totalFrames = total;
+  const curseur = $('#temps');
+  curseur.max = total - 1;
+  if (parseInt(curseur.value) > total - 1) curseur.value = total - 1;
+  montrerTemps();
+}
+
+function montrerTemps() {
+  $('#v-temps').textContent = `${parseInt($('#temps').value) + 1} / ${etat.totalFrames}`;
 }
 
 // --- branchements -----------------------------------------------------------
@@ -632,24 +708,42 @@ $('#hasard').onclick = async () => {
 $('#debordement').onchange = demanderRendu;
 $('#graine').onchange = demanderRendu;
 $('#relancer').onclick = () => { $('#graine').value = ''; rendre(); };
-$('#taille').onchange = () => EFFETS.forEach(afficherValeur);
+$('#taille').onchange = () => { EFFETS.forEach(afficherValeur); montrerAxe(); };
 $('#exporter').onclick = exporter;
+
+// Les réglages de l'axe portent tous le même nom côté page et côté serveur.
+const CHIFFRES = { frames: v => `${v} images`, stagger: v => `${Math.round(v * 100)} %`,
+                   residue: v => `${Math.round(v * 100)} %`,
+                   segment_growth: v => `× ${(1 + parseFloat(v)).toFixed(1)}` };
+AXE.forEach(cle => {
+  const el = $('#' + cle);
+  const montrer = () => {
+    const brut = el.value;
+    $('#v-' + cle).textContent = CHIFFRES[cle]
+      ? CHIFFRES[cle](brut)
+      // Les longueurs sont des fractions de toile : on les montre en pixels
+      : `${Math.max(1, Math.round(brut * parseInt($('#taille').value)))} px`;
+  };
+  el.oninput = () => {
+    montrer();
+    if (cle === 'frames') ajusterAxe(Math.round(parseFloat(el.value)));
+    demanderRendu();
+  };
+  el.addEventListener('afficher', montrer);
+  montrer();
+});
+BASCULES.forEach(cle => { $('#' + cle).onchange = demanderRendu; });
+
+// Rafraîchir l'affichage de tous les réglages d'axe d'un coup, après une
+// reprise ou un changement de format.
+function montrerAxe() { AXE.forEach(cle => $('#' + cle).dispatchEvent(new Event('afficher'))); }
+
+$('#temps').oninput = () => { montrerTemps(); demanderRendu(); };
 $('#dossier').onchange = () => changerDossier($('#dossier').value);
 $('#cible').onchange = () => { etat.cible = $('#cible').value; peindreEffets(); };
 $('#tirer-video').onclick = tirerVideo;
-document.querySelectorAll('.mode').forEach(b => b.onclick = () => basculer(b.dataset.mode));
-$('#frames').oninput = () => {
-  $('#v-frames').textContent = $('#frames').value;
-  etat.totalFrames = 0;   // la séquence change de longueur
-  demanderRendu();
-};
-$('#position').oninput = () => {
-  $('#v-position').textContent =
-    `${parseInt($('#position').value) + 1} / ${etat.totalFrames || '?'}`;
-  demanderRendu();
-};
-$('#v-frames').textContent = $('#frames').value;
 
+montrerTemps();
 batirEffets();
 chargerSources();
 chargerTirages();

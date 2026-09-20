@@ -99,8 +99,13 @@ def save_with_recipe(
     return path
 
 
-def read_recipe(path: str | Path, sources=None) -> Recipe | None:
-    """Relit la recette d'une image, ou None si elle n'en porte pas."""
+def read_payload(path: str | Path) -> dict | None:
+    """Tout ce que l'image porte, recette et réglages d'axe compris.
+
+    L'axe du temps et l'instant prélevé sont enregistrés à côté de la
+    recette : reprendre un tirage doit rendre la composition *et* le moment
+    où elle a été saisie, sinon la reprise ne retrouve pas l'image.
+    """
     path = Path(path)
     try:
         with Image.open(path) as pil:
@@ -109,10 +114,19 @@ def read_recipe(path: str | Path, sources=None) -> Recipe | None:
                 described = pil.getexif().get(EXIF_IMAGE_DESCRIPTION)
                 if isinstance(described, str) and described.startswith(MARKER):
                     raw = described[len(MARKER):].strip()
-            if not raw:
-                return None
-            return recipe_from_json(raw, sources=sources)
+            return json.loads(raw) if raw else None
     except (OSError, ValueError, KeyError, json.JSONDecodeError):
         # Image absente, illisible, ou métadonnées abîmées : ce n'est pas une
         # erreur, seulement une image dont on ne sait pas refaire le tirage.
+        return None
+
+
+def read_recipe(path: str | Path, sources=None) -> Recipe | None:
+    """Relit la recette d'une image, ou None si elle n'en porte pas."""
+    payload = read_payload(path)
+    if payload is None:
+        return None
+    try:
+        return recipe_from_json(json.dumps(payload), sources=sources)
+    except (ValueError, KeyError, TypeError):
         return None

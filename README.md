@@ -1,7 +1,8 @@
 # Atelier
 
 Instrument de composition par saillance et dégradation. Plusieurs images en
-entrée, des réglages, une image en sortie — à la taille qu'on veut.
+entrée, un axe de décomposition, une image ou une vidéo en sortie — à la
+taille qu'on veut.
 
 Reprend le moteur de `blending-image2.py`, qui a produit les 230 œuvres des
 six séries de décembre 2024, en levant ce qui empêchait d'en faire un outil.
@@ -16,6 +17,12 @@ perdre. Les 230 œuvres existantes sont bloquées en 1024×1024, soit 8,7 cm à
 **Le hasard reste entier.** Sans graine, chaque rendu est une composition que
 personne n'a demandée. La graine ne sert qu'à revenir sur un tirage pour
 l'agrandir — elle n'oblige à rien répéter.
+
+**Il n'y a qu'une œuvre, prise à des moments différents.** Les images se
+superposent, puis le temps les défait. Une image fixe est un instant prélevé
+sur cet axe, une vidéo est l'axe entier ; on ne choisit qu'au moment de
+tirer. C'est ce qui fait tenir le propos : le compostage est un mécanisme qui
+évolue dans le temps, pas deux modes d'export.
 
 **Rien ne s'accumule.** La graine et les réglages voyagent dans les
 métadonnées de l'image, jamais dans un fichier à côté. Une image reste un
@@ -134,30 +141,44 @@ différents pour la trame, identique à l'octet près pour la saturation. Le
 reste vérifie qu'une graine donne la même composition à toutes les tailles, et
 que la recette survit à l'aller-retour dans l'image.
 
-## La voie vidéo
+## L'axe du temps
 
-Bascule **Vidéo** en haut à droite. Les deux voies partagent tout : les
-matières de l'image s'appliquent à chaque image de la séquence, réglages par
-image compris, et le tri de pixels comme le décalage de canaux — nés du
-datamoshing — sont disponibles sur une image fixe.
+La barre sous l'aperçu va de **intact** à **composté**. À gauche, la
+composition telle que la rendait `blending-image2` — bit pour bit, c'est
+vérifié par un test. En avançant, chaque couche se trie par segments, perd
+l'alignement de ses canaux, s'arrache par plaques et laisse voir celle du
+dessous.
 
-Les mêmes images et les mêmes matières,
-plus une transition : la première image se décompose par seuils de saillance
-pendant que la suivante se révèle dessous, avec un tri de pixels par segments.
-
-Le curseur **Position** parcourt la séquence. Chaque image se calcule seule,
-sans rejouer ce qui précède — on s'arrête sur l'instant voulu et **Tirer cette
-image** le sort à la taille choisie.
+Chaque instant se calcule seul, sans rejouer ce qui précède : on se déplace
+librement dans le temps. **Tirer cet instant** sort l'image où l'on est, à la
+taille choisie ; **Tirer tout l'axe en vidéo** écrit un mp4. Le calcul d'une
+vidéo dure des minutes en grand format, il tourne en tâche de fond et
+l'avancement s'affiche.
 
 C'est ce qui remplace la capture d'écran. Les 116 images de
 `export-vid_sauv/SCREENSHOT` font 2254 px alors que leurs vidéos sources en
 contenaient 3016 : la capture perdait un quart de la définition. Ici l'instant
 sort à 4000 ou 8000 px.
 
-**Tirer la séquence** écrit un mp4. Le calcul dure des minutes en grand
-format, il tourne en tâche de fond et l'avancement s'affiche.
+### Les réglages de l'axe
+
+| Réglage | Ce qu'il fait |
+|---|---|
+| Durée | La longueur de l'axe, en images. Elle ne dépend pas du nombre d'images choisies : une image de plus est une couche, pas une diapositive. |
+| Décalage entre couches | À 0 tout pourrit ensemble. Au maximum, les couches s'effacent l'une après l'autre. Ce qui est posé en dernier part en premier. |
+| Ce qui résiste | La part la plus dense de chaque couche, encore là à la fin. À 0, l'axe s'éteint au noir. |
+| Segment le plus court / le plus long | La longueur des bandes triées. Les rapports entre canaux sont conservés — c'est leur écart qui sépare les couleurs, pas leur valeur. |
+| Allongement | De combien les segments s'étirent à mesure que l'image se défait. |
+| Décalage RVB | La séparation des canaux rouge et bleu, qui croît avec le temps. |
+
+Les quatre bascules de **Fidélité** disent quoi garder de l'original : le
+tri par canaux séparés, le rouge jamais trié, le tri sur la zone visible, la
+dissolution par quantiles. Les trois dernières sont des corrections — voir
+plus bas — et se décochent pour retrouver le rendu de 2025.
 
 ### Pourquoi l'original ne montrait pas de datamoshing
+
+Deux corrections sont nées de cette recherche, toutes deux débrayables.
 
 Deux raisons, trouvées en cherchant l'effet manquant.
 

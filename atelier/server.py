@@ -32,22 +32,10 @@ import cv2
 import numpy as np
 
 from atelier.chance import random_recipe
-from atelier.engine import (
-    Effect,
-    PREVIEW_SIZE,
-    Recipe,
-    load_source,
-    new_seed,
-    render,
-)
-from atelier.metadata import read_recipe, save_with_recipe
-from atelier.video import (
-    Motion,
-    count_frames,
-    render_frame,
-    render_sequence,
-    write_video,
-)
+from atelier.decay import Decay, compose_at, count_frames, sequence
+from atelier.engine import Effect, Recipe, load_source, new_seed
+from atelier.metadata import read_payload, read_recipe, save_with_recipe
+from atelier.video import write_video
 
 logger = logging.getLogger("atelier")
 
@@ -146,11 +134,47 @@ class Library:
             return self._cache[path]
 
 
-def motion_from_request(body: dict) -> Motion:
-    return Motion(
-        frames_per_transition=max(2, int(body.get("frames", 24))),
-        fps=max(1, int(body.get("fps", 24))),
+def decay_from_request(body: dict) -> Decay:
+    """L'axe du temps et la manière dont la matière se défait."""
+    defaut = Decay()
+
+    def nombre(cle, mini, maxi, conversion=float):
+        brut = body.get(cle)
+        if brut is None:
+            return getattr(defaut, cle)
+        return max(mini, min(maxi, conversion(brut)))
+
+    def bascule(cle):
+        brut = body.get(cle)
+        return getattr(defaut, cle) if brut is None else bool(brut)
+
+    return Decay(
+        frames=nombre("frames", 2, 600, int),
+        fps=nombre("fps", 1, 60, int),
+        stagger=nombre("stagger", 0.0, 1.0),
+        residue=nombre("residue", 0.0, 0.9),
+        min_segment=nombre("min_segment", 0.002, 0.5),
+        max_segment=nombre("max_segment", 0.004, 0.8),
+        segment_growth=nombre("segment_growth", 0.0, 6.0),
+        channel_shift=nombre("channel_shift", 0.0, 0.2),
+        enhanced=bascule("enhanced"),
+        channel_quirk=bascule("channel_quirk"),
+        sort_visible=bascule("sort_visible"),
+        even_dissolve=bascule("even_dissolve"),
     )
+
+
+def decay_payload(decay: Decay) -> dict:
+    """L'axe tel que l'interface l'attend."""
+    return {
+        "frames": decay.frames, "fps": decay.fps,
+        "stagger": decay.stagger, "residue": decay.residue,
+        "min_segment": decay.min_segment, "max_segment": decay.max_segment,
+        "segment_growth": decay.segment_growth,
+        "channel_shift": decay.channel_shift,
+        "enhanced": decay.enhanced, "channel_quirk": decay.channel_quirk,
+        "sort_visible": decay.sort_visible, "even_dissolve": decay.even_dissolve,
+    }
 
 
 # Les tirages vidéo durent des minutes : ils partent en tâche de fond et
@@ -160,17 +184,17 @@ JOBS: dict[str, dict] = {}
 JOBS_LOCK = threading.Lock()
 
 
-def run_video_job(job_id: str, recipe, motion, size, images, target: Path):
-    total = count_frames(recipe, motion)
+def run_video_job(job_id: str, recipe, decay, size, images, target: Path):
+    total = count_frames(decay)
 
     def frames():
-        for done, frame in enumerate(render_sequence(recipe, motion, size, images), 1):
+        for done, frame in enumerate(sequence(recipe, decay, size, images), 1):
             with JOBS_LOCK:
                 JOBS[job_id]["done"] = done
             yield frame
 
     try:
-        written = write_video(frames(), target, motion.fps)
+        written = write_video(frames(), target, decay.fps)
         with JOBS_LOCK:
             JOBS[job_id].update(state="fini", path=str(target), written=written)
         logger.info("vidéo écrite : %s (%d frames)", target, written)
@@ -212,9 +236,14 @@ def recipe_from_request(body: dict, library: Library) -> tuple[Recipe, list]:
     return recipe, [library.image(p) for p in paths]
 
 
-def recipe_payload(recipe, sources=None) -> dict:
-    """La recette telle que l'interface l'attend."""
+AXE_KEYS = tuple(decay_payload(Decay())) + ("moment",)
+
+
+def recipe_payload(recipe, sources=None, extra: dict | None = None) -> dict:
+    """La recette telle que l'interface l'attend, axe compris."""
+    axe = {k: extra[k] for k in AXE_KEYS if extra and k in extra}
     return {
+        **axe,
         "sources": list(recipe.sources if sources is None else sources),
         "seed": recipe.seed,
         "effects": [{"name": e.name, "strength": e.strength} for e in recipe.effects],
@@ -278,6 +307,7 @@ class Handler(BaseHTTPRequestHandler):
                     "root": str(self.library.root),
                     "images": self.library.listing(),
                     "neighbours": self.library.neighbours(),
+                    "output": str(self.output_dir.resolve()),
                 })
             if route.path == "/api/thumbnail":
                 return self._thumbnail(unquote(query.get("path", [""])[0]))
@@ -300,8 +330,6 @@ class Handler(BaseHTTPRequestHandler):
                 return self._render()
             if route.path == "/api/export":
                 return self._export()
-            if route.path == "/api/frame":
-                return self._frame()
             if route.path == "/api/folder":
                 return self._folder()
             if route.path == "/api/video":
@@ -331,10 +359,11 @@ class Handler(BaseHTTPRequestHandler):
 
     def _recipe_of(self, raw: str):
         """Relit la recette cachée dans une image déjà produite."""
-        found = read_recipe(Path(raw).expanduser())
+        path = Path(raw).expanduser()
+        found = read_recipe(path)
         if found is None:
             return self._json({"recipe": None})
-        self._json({"recipe": recipe_payload(found)})
+        self._json({"recipe": recipe_payload(found, extra=read_payload(path))})
 
     def _exports(self):
         """Les tirages déjà faits, avec la recette que chacun porte.
@@ -365,7 +394,7 @@ class Handler(BaseHTTPRequestHandler):
                 "name": path.name,
                 "seed": recipe.seed,
                 "complete": complete,
-                "recipe": recipe_payload(recipe, sources),
+                "recipe": recipe_payload(recipe, sources, read_payload(path)),
             })
         self._json({"exports": found[:40]})
 
@@ -386,10 +415,19 @@ class Handler(BaseHTTPRequestHandler):
         self._json({"recipe": payload})
 
     def _render(self):
+        """L'aperçu, à l'instant demandé de l'axe.
+
+        Il n'y a plus de rendu « fixe » distinct d'une frame : l'instant 0 est
+        la composition intacte, et tout le reste est le même calcul plus loin
+        dans le temps.
+        """
         body = self._body()
         recipe, images = recipe_from_request(body, self.library)
+        decay = decay_from_request(body)
         size = int(body.get("size") or PREVIEW)
-        image = render(recipe, size=size, sources=images)
+        index = max(0, min(int(body.get("moment", 0)), count_frames(decay) - 1))
+
+        image = compose_at(recipe, decay, size, index, images)
 
         payload = self._jpeg(image)
         self.send_response(200)
@@ -398,6 +436,7 @@ class Handler(BaseHTTPRequestHandler):
         # La graine voyage dans l'en-tête : l'interface l'affiche sans
         # avoir à la deviner quand elle a laissé le serveur en tirer une.
         self.send_header("X-Atelier-Seed", str(recipe.seed))
+        self.send_header("X-Atelier-Frames", str(count_frames(decay)))
         self.send_header("Cache-Control", "no-store")
         self.end_headers()
         self.wfile.write(payload)
@@ -410,49 +449,15 @@ class Handler(BaseHTTPRequestHandler):
             "root": str(self.library.root),
             "images": self.library.listing(),
             "neighbours": self.library.neighbours(),
+            "output": str(self.output_dir.resolve()),
         })
-
-    def _frame(self):
-        """Une frame de la séquence, à la taille voulue.
-
-        C'est ce qui remplace la capture d'écran : on parcourt, on s'arrête,
-        on sort l'instant en pleine définition.
-        """
-        body = self._body()
-        recipe, images = recipe_from_request(body, self.library)
-        motion = motion_from_request(body)
-        size = int(body.get("size") or PREVIEW)
-        index = int(body.get("frame", 0))
-
-        image = render_frame(recipe, motion, size, index, images)
-
-        if body.get("save"):
-            self.output_dir.mkdir(parents=True, exist_ok=True)
-            target = self.output_dir / f"atelier_{recipe.seed}_f{index}_{size}.jpg"
-            save_with_recipe(image, target, recipe, rendered_at=size, frame=index)
-            return self._json({
-                "path": str(target), "seed": recipe.seed, "frame": index,
-                "size": size, "centimetres": round(size / 300 * 2.54, 1),
-            })
-
-        payload = self._jpeg(image)
-        self.send_response(200)
-        self.send_header("Content-Type", "image/jpeg")
-        self.send_header("Content-Length", str(len(payload)))
-        self.send_header("X-Atelier-Seed", str(recipe.seed))
-        self.send_header("X-Atelier-Frames", str(count_frames(recipe, motion)))
-        self.send_header("Cache-Control", "no-store")
-        self.end_headers()
-        self.wfile.write(payload)
 
     def _video(self):
         import uuid
 
         body = self._body()
         recipe, images = recipe_from_request(body, self.library)
-        if len(images) < 2:
-            raise ValueError("il faut au moins deux images pour une vidéo")
-        motion = motion_from_request(body)
+        decay = decay_from_request(body)
         size = int(body.get("size", 2000))
 
         self.output_dir.mkdir(parents=True, exist_ok=True)
@@ -460,14 +465,14 @@ class Handler(BaseHTTPRequestHandler):
         job_id = uuid.uuid4().hex[:12]
         with JOBS_LOCK:
             JOBS[job_id] = {"state": "en cours", "done": 0,
-                            "total": count_frames(recipe, motion)}
+                            "total": count_frames(decay)}
 
         threading.Thread(
             target=run_video_job,
-            args=(job_id, recipe, motion, size, images, target),
+            args=(job_id, recipe, decay, size, images, target),
             daemon=True,
         ).start()
-        self._json({"job": job_id, "total": count_frames(recipe, motion),
+        self._json({"job": job_id, "total": count_frames(decay),
                     "seed": recipe.seed})
 
     def _job(self, job_id: str):
@@ -478,19 +483,26 @@ class Handler(BaseHTTPRequestHandler):
     def _export(self):
         body = self._body()
         recipe, images = recipe_from_request(body, self.library)
+        decay = decay_from_request(body)
         size = int(body.get("size", 4000))
-        image = render(recipe, size=size, sources=images)
+        index = max(0, min(int(body.get("moment", 0)), count_frames(decay) - 1))
+        image = compose_at(recipe, decay, size, index, images)
 
         self.output_dir.mkdir(parents=True, exist_ok=True)
         suffix = ".png" if body.get("format") == "png" else ".jpg"
-        target = self.output_dir / f"atelier_{recipe.seed}_{size}{suffix}"
-        save_with_recipe(image, target, recipe, rendered_at=size)
+        # L'instant figure dans le nom : deux tirages du même axe se
+        # distinguent sans avoir à ouvrir les fichiers.
+        marque = "" if index == 0 else f"_t{index}"
+        target = self.output_dir / f"atelier_{recipe.seed}{marque}_{size}{suffix}"
+        save_with_recipe(image, target, recipe, rendered_at=size, moment=index,
+                         **decay_payload(decay))
 
         logger.info("tirage écrit : %s", target)
         self._json({
             "path": str(target),
             "seed": recipe.seed,
             "size": size,
+            "moment": index,
             "centimetres": round(size / 300 * 2.54, 1),
         })
 

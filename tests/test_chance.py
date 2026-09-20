@@ -17,7 +17,7 @@ from atelier.chance import (
     PROFILES,
     WEIGHTS,
     draw_effects,
-    random_motion,
+    random_decay,
     random_recipe,
 )
 from atelier.engine import EFFECTS, Recipe, render
@@ -183,11 +183,14 @@ class TestItActuallyRenders:
         )
 
 
-class TestTheMotionDraw:
-    def test_a_transition_lasts_a_plausible_time(self):
+class TestTheAxisDraw:
+    def test_a_drawn_axis_lasts_a_plausible_time(self):
         rng = random.Random(67)
         for _ in range(200):
-            motion = random_motion(rng)
-            assert 16 <= motion.frames_per_transition <= 40
-            assert motion.fps in (20, 24)
-            assert motion.min_segment < motion.max_segment
+            decay = random_decay(rng)
+            assert 40 <= decay.frames <= 120
+            assert decay.fps in (20, 24)
+            assert decay.min_segment < decay.max_segment
+            # Aux extrêmes, le décalage écrase le propos : tout pourrit
+            # ensemble, ou la pile devient un diaporama.
+            assert 0.2 < decay.stagger < 0.7

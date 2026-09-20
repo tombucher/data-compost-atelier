@@ -63,7 +63,7 @@ from __future__ import annotations
 import random
 
 from atelier.engine import Effect, Recipe
-from atelier.video import Motion
+from atelier.decay import Decay
 
 # Part de chaque famille dans les 230 œuvres conservées
 FAMILIES = ("halftone", "bitmap", "pixelate", "saturate")
@@ -167,18 +167,23 @@ def random_recipe(available: list[str], rng: random.Random | None = None,
     )
 
 
-def random_motion(rng: random.Random | None = None) -> Motion:
-    """Un mouvement plausible pour la voie vidéo.
+def random_decay(rng: random.Random | None = None) -> Decay:
+    """Un axe de décomposition plausible.
 
     Les vidéos conservées durent de une à douze secondes, à 20 ou 24 images
-    par seconde, ce qui place une transition entre 16 et 40 images.
+    par seconde : l'axe tient entre 40 et 120 images. Le décalage entre
+    couches reste au milieu de sa course — à 0 tout pourrit de concert, ce
+    qui écrase le propos, et à 1 la pile devient un diaporama.
     """
     rng = rng or random.Random()
-    return Motion(
-        frames_per_transition=rng.randint(16, 40),
+    return Decay(
+        frames=rng.randint(40, 120),
         fps=rng.choice((20, 24)),
+        stagger=rng.uniform(0.25, 0.65),
+        residue=rng.uniform(0.05, 0.22),
         min_segment=rng.uniform(0.02, 0.05),
         max_segment=rng.uniform(0.08, 0.16),
+        segment_growth=rng.uniform(0.8, 2.5),
         channel_shift=rng.uniform(0.008, 0.025),
         enhanced=rng.random() < 0.8,
     )
