@@ -38,6 +38,7 @@ from atelier.engine import (
     effects_for,
     layer_geometry,
     load_source,
+    normaliser,
     placements_for,
     saliency_of,
     smooth_mask,
@@ -222,7 +223,7 @@ def compose_at(
             avance(layer + 1, len(images))
 
     covered = weights > 1e-6
-    canvas[covered] /= weights[covered][:, None]
+    normaliser(canvas, weights, recipe.fade)
 
     # La normalisation rend sa pleine intensité au moindre pixel couvert :
     # adoucir les masques en amont ne servirait à rien, le bord de la

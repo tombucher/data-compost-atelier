@@ -331,6 +331,7 @@ def recipe_from_request(body: dict, library: Library,
         saliency_threshold=int(body.get("threshold", 60)),
         bleed=float(body.get("bleed", 0.0)),
         full_frame=bool(body.get("full_frame", False)),
+        fade=float(body.get("fade", 0.0)),
         crop=tuple(float(v) for v in body["crop"]) if body.get("crop") else None,
         smoothness=float(body.get("smoothness", 3.0)),
         edge_blur=int(body.get("edge_blur", 0)),
@@ -363,6 +364,7 @@ def recipe_payload(recipe, sources=None, extra: dict | None = None) -> dict:
         "threshold": recipe.saliency_threshold,
         "bleed": recipe.bleed,
         "full_frame": recipe.full_frame,
+        "fade": recipe.fade,
         "crop": list(recipe.crop) if recipe.crop else None,
         "smoothness": recipe.smoothness,
         "edge_blur": recipe.edge_blur,
@@ -578,6 +580,7 @@ class Handler(BaseHTTPRequestHandler):
                 # Les tris ne se voient pas s'ils restent dans la zone calme
                 bleed=0.85 if nom in ("pixelsort", "mosh") else recipe.bleed,
                 full_frame=recipe.full_frame,
+                fade=recipe.fade,
             )
             rendus[nom] = self._jpeg64(
                 render(essai, size=VIGNETTE, sources=images, fields=cartes))

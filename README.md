@@ -185,7 +185,8 @@ annule donc le choix de la forme.
 
 ## La saillance
 
-Quatre curseurs décident *où* les matières mordent.
+Cinq curseurs décident *où* les matières mordent, et jusqu'où la carte
+décide de ce qu'on voit.
 
 **Part dégradée** dit quelle proportion de l'image leur revient, de la zone la
 plus calme à la plus saillante. C'est un percentile : à 60, les 60 % les moins
@@ -219,6 +220,29 @@ sur le pourtour des plages noires, la raideur du bord passe de 145 à 48.
 
 Le fondu ne mord qu'une fois l'axe engagé : au premier instant il n'y a pas
 d'évidement, et la composition doit rester celle qu'on a réglée.
+
+**Disparition** rend à la carte de saillance le droit d'effacer.
+
+La composition divise la toile par la somme des poids, et c'est ce qui lui
+donne une image plutôt qu'une bouillie sombre : la carte est si concentrée
+que le poids total reste sous 1 sur plus de 99 % de la surface, médiane
+comprise à 0,11. Sans la division, il ne resterait que quelques points
+allumés. Mais la division a une conséquence qu'on ne voit qu'à l'usage — le
+moindre pixel couvert retrouve sa pleine intensité. La saillance n'arbitre
+plus qu'entre les couches, et n'efface rien. En plein cadre, où tout est
+couvert, une séquence entière peut se dérouler sans un seul noir : mesurée
+sur douze images, la part noire reste à 0 % jusqu'au milieu de l'axe, et
+n'arrive qu'à la fin, quand l'évidement a mangé presque toute la matière.
+Ce qu'il découvre avant, c'est la couche du dessous, à pleine intensité.
+
+Le curseur est un percentile, comme la part dégradée et pour la même
+raison : à 40, les 40 % les moins présents de la toile s'enfoncent dans le
+fond. Le noir ne tombe pas d'un coup — le quart de ce qui reste au-dessus du
+seuil sert de dégradé, sans quoi la disparition découperait la composition
+aussi net qu'un masque binaire. À 0, le rendu est inchangé au pixel près.
+
+Ce que ça change sur l'axe : le sujet émerge du vide dès le premier instant,
+et l'évidement débouche sur du noir au lieu de découvrir autre chose.
 
 ## Le cadrage
 

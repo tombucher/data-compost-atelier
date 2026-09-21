@@ -440,6 +440,10 @@
         <div class="ligne"><label for="bords">Contours seuls</label><span class="valeur" id="v-bords"></span></div>
         <input type="range" id="bords" min="0" max="15" step="1" value="0">
       </div>
+      <div class="reglage">
+        <div class="ligne"><label for="disparition">Disparition</label><span class="valeur" id="v-disparition"></span></div>
+        <input type="range" id="disparition" min="0" max="95" step="1" value="0">
+      </div>
     </section>
 
     <section>
@@ -551,6 +555,7 @@ const AIDES = {
   bavure: "De combien les matières débordent de la zone calme. À zéro elles s'y tiennent — or cette zone ne porte que 14 % du poids de la composition, et un tri s'y noie. En montant, elles gagnent le sujet et se voient enfin.",
   lissage: "Adoucit la carte de saillance avant de s'en servir. Au minimum, les zones dégradées ont des bords hachés ; en montant, elles se fondent.",
   bords: "Ne garde que le pourtour des zones saillantes, au lieu de leur intérieur. L'image se réduit à un liseré autour de son sujet.",
+  disparition: "Quelle part de la toile s'enfonce dans le noir, en partant du moins saillant. À zéro, la composition rend sa pleine intensité au moindre pixel couvert : la saillance n'arbitre plus qu'entre les couches, et en plein cadre il ne reste aucun noir. En montant, le sujet émerge du fond, et l'évidement du temps débouche vraiment sur du vide.",
 
   frames: "Le nombre d'images entre l'intact et le composté. Ne change pas la composition, seulement la finesse du parcours — et la durée de la vidéo.",
   ripening: "De combien les matières que vous avez posées s'intensifient au bout de l'axe. La trame grossit, les blocs s'élargissent, le bitmap durcit. C'est ce qui fait que le compostage dépend de ce qu'on a choisi.",
@@ -600,7 +605,7 @@ const FORMES = [
 const AXE = ['frames', 'stagger', 'residue', 'ripening', 'tearing',
              'min_segment', 'max_segment', 'segment_growth', 'channel_shift'];
 const BASCULES = ['enhanced', 'channel_quirk', 'sort_visible', 'even_dissolve'];
-const MORSURE = ['seuil', 'bavure', 'lissage', 'bords'];
+const MORSURE = ['seuil', 'bavure', 'lissage', 'bords', 'disparition'];
 
 function reglagesNeufs() {
   return Object.fromEntries(EFFETS.map(
@@ -921,6 +926,7 @@ function corps(extra = {}) {
     edge_blur: parseInt($('#bords').value),
     bleed: parseFloat($('#bavure').value),
     full_frame: etat.pleinCadre,
+    fade: parseFloat($('#disparition').value) / 100,
     // Pendant le tracé, l'aperçu montre la toile entière : on a besoin de
     // voir ce qu'on écarte pour placer le cadre.
     crop: etat.trace ? null : etat.cadre,
@@ -1101,6 +1107,7 @@ function appliquer(r) {
   $('#bords').value = r.edge_blur;
   $('#debordement').checked = r.overflow;
   if (r.bleed !== undefined) $('#bavure').value = r.bleed;
+  if (r.fade !== undefined) $('#disparition').value = Math.round(r.fade * 100);
   if (r.full_frame !== undefined) poserCadrage(r.full_frame);
   etat.cadre = r.crop ? r.crop.slice() : null;
 
@@ -1307,7 +1314,8 @@ document.addEventListener('click', fermerAide);
 document.addEventListener('keydown', e => { if (e.key === 'Escape') fermerAide(); });
 
 // --- branchements -----------------------------------------------------------
-const UNITES = { seuil: v => v + ' %', bavure: v => Math.round(v * 100) + ' %' };
+const UNITES = { seuil: v => v + ' %', bavure: v => Math.round(v * 100) + ' %',
+                 disparition: v => v + ' %' };
 function montrerMorsure() {
   MORSURE.forEach(id => {
     $('#v-' + id).textContent = UNITES[id] ? UNITES[id]($('#' + id).value) : $('#' + id).value;

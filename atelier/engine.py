@@ -106,6 +106,14 @@ class Recipe:
     # plein cadre, elle est agrandie jusqu'à couvrir la toile et déborde : il
     # ne reste pas de fond, comme sur une capture de vidéo.
     full_frame: bool = False
+    # Jusqu'où la saillance décide aussi de la *présence*, et non seulement de
+    # qui l'emporte entre deux couches. À 0, la composition est ramenée à sa
+    # pleine intensité partout où quelque chose est posé : il ne reste de noir
+    # que là où aucune image n'atteint, donc plus du tout en plein cadre. En
+    # montant, la part la moins présente s'enfonce dans le fond — c'est alors
+    # la saillance qui creuse, et l'évidement du temps débouche sur du noir au
+    # lieu de découvrir la couche du dessous.
+    fade: float = 0.0
     # Le cadre retenu dans la toile, en fractions : (gauche, haut, côté).
     # None garde tout. Un cadre ne recadre pas une image déjà rendue : la
     # toile entière est calculée plus grande, de sorte que la part gardée
@@ -548,6 +556,43 @@ def blend_into(canvas, weights, tile, weight, x: int, y: int) -> None:
     weights[y0:y1, x0:x1] += poids
 
 
+# Part de ce qui reste au-dessus du seuil que le fondu occupe. Le noir ne
+# s'installe pas d'un coup : entre le seuil et ce quantile, la matière
+# s'éteint progressivement, sans quoi la disparition découperait la
+# composition aussi net qu'un masque binaire.
+FADE_RAMP = 0.25
+
+
+def normaliser(canvas: np.ndarray, weights: np.ndarray, fade: float) -> None:
+    """Rend son intensité à la composition, et laisse s'effacer ce qui pèse peu.
+
+    La division par les poids est ce qui donne une image et non une bouillie
+    sombre : la carte de saillance est très concentrée — le poids total reste
+    sous 1 sur plus de 99 % de la toile —, donc sans elle il ne subsisterait
+    que quelques points allumés. Mais elle a un effet de bord : le moindre
+    pixel couvert y retrouve sa pleine intensité, si bien que la saillance
+    n'arbitre plus qu'entre les couches et n'efface jamais rien. En plein
+    cadre, où tout est couvert, la composition n'a alors plus un seul noir.
+
+    `fade` rouvre cette possibilité, en part de la toile : à 0,4, les quarante
+    pour cent les moins présents s'enfoncent dans le fond. Le seuil se tire de
+    la distribution des poids et non d'une valeur brute, pour la raison qui
+    vaut déjà pour le seuil des matières — voir `Recipe.saliency_threshold`.
+    """
+    covered = weights > 1e-6
+    canvas[covered] /= weights[covered][:, None]
+
+    part = float(np.clip(fade, 0.0, 1.0))
+    if part <= 0 or not covered.any():
+        return
+
+    presents = weights[covered]
+    bas = float(np.quantile(presents, part))
+    haut = float(np.quantile(presents, part + (1.0 - part) * FADE_RAMP))
+    presence = np.clip((weights - bas) / max(haut - bas, 1e-6), 0.0, 1.0)
+    canvas *= presence[:, :, None]
+
+
 # Plafond de la toile de calcul. Une toile porte un canvas en float32 à
 # trois canaux plus sa carte de poids, soit seize octets par pixel : à
 # 32000 px elle demanderait seize gigaoctets, et la machine part en mémoire
@@ -626,6 +671,5 @@ def render(recipe: Recipe, size: int = PREVIEW_SIZE, sources=None,
         weight = saliency.astype(np.float32) / 255.0
         blend_into(canvas, weights, treated, weight, x, y)
 
-    covered = weights > 0
-    canvas[covered] /= weights[covered][:, None]
+    normaliser(canvas, weights, recipe.fade)
     return np.clip(canvas, 0, 255).astype(np.uint8)

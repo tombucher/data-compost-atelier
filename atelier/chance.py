@@ -177,6 +177,11 @@ def random_recipe(available: list[str], rng: random.Random | None = None,
         # Les matières discrètes ont besoin de déborder pour se voir ; le
         # corpus, lui, ne débordait pas. On reste donc du côté modeste.
         bleed=rng.uniform(0.0, 0.45),
+        # La disparition n'existait pas dans le corpus : ses images étaient
+        # posées entières, et le noir venait du fond laissé autour. Un tirage
+        # sur trois la sort quand même, modérément — c'est la seule façon de
+        # retrouver un sujet qui émerge du vide quand la toile est couverte.
+        fade=0.0 if rng.random() < 0.67 else rng.uniform(0.15, 0.5),
         # La graine vient du tirage : un rng donné rejoue le même tirage entier.
         seed=rng.randrange(2 ** 31),
         effects=effects,
