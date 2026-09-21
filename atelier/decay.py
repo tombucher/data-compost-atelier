@@ -64,6 +64,18 @@ class Decay:
     frames: int = 48
     fps: int = 24
 
+    # Deux manières de faire passer le temps sur les mêmes images.
+    #
+    # Superposées, c'est la pile : toutes les images sont là en même temps,
+    # pondérées par leur saillance, et le temps défait l'ensemble. Ce que
+    # l'évidement creuse finit par déboucher sur le fond.
+    #
+    # Enchaînées, c'est le montage des vidéos de 2025 : les images se
+    # succèdent, chacune se défait pour découvrir la suivante, et ce que
+    # l'une abandonne, l'autre l'occupe entièrement. La couverture vaut
+    # toujours 1 : il n'y a jamais de fond. Voir chain.py.
+    chained: bool = False
+
     # Le décalage entre couches, et ce qui résiste jusqu'au bout
     stagger: float = 0.45
     residue: float = 0.12
@@ -174,6 +186,11 @@ def compose_at(
     appelée après chaque couche, permet de suivre un tirage qui dure : en
     grand format, une couche demande plusieurs secondes.
     """
+    if decay.chained:
+        from atelier.chain import frame_at
+
+        return frame_at(recipe, decay, size, index, sources, avance=avance)
+
     images = sources if sources is not None else [load_source(p) for p in recipe.sources]
     if not images:
         raise ValueError("aucune image source")
@@ -260,15 +277,30 @@ def sequence(recipe: Recipe, decay: Decay, size: int, sources=None):
     if not images:
         raise ValueError("aucune image source")
 
+    if decay.chained:
+        from atelier.chain import sequence as enchainer
+
+        yield from enchainer(recipe, decay, size, images)
+        return
+
     fields = prepare_fields(recipe, images)
-    for index in range(count_frames(decay)):
+    for index in range(count_frames(decay, len(images))):
         yield compose_at(recipe, decay, size, index, images, fields)
 
 
-def count_frames(decay: Decay) -> int:
-    """La longueur de l'axe ne dépend que du réglage, plus du nombre d'images.
+def count_frames(decay: Decay, images: int = 2) -> int:
+    """La longueur de l'axe.
 
-    Une image de plus allonge la pile, pas la durée : c'est une couche de
-    compost supplémentaire, pas une diapositive de plus.
+    Superposées, elle ne dépend que du réglage : une image de plus allonge la
+    pile, pas la durée — c'est une couche de compost supplémentaire, pas une
+    diapositive de plus.
+
+    Enchaînées, l'axe garde la même longueur mais se partage entre les
+    transitions, au nombre entier d'images près. Ajouter une image resserre
+    donc les enchaînements au lieu d'allonger la vidéo dans le dos.
     """
+    if decay.chained:
+        from atelier.chain import compte
+
+        return compte(decay, images)
     return max(2, decay.frames)

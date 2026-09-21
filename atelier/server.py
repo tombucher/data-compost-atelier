@@ -203,6 +203,7 @@ def decay_from_request(body: dict) -> Decay:
 
     return Decay(
         frames=nombre("frames", 2, 600, int),
+        chained=bascule("chained"),
         fps=nombre("fps", 1, 60, int),
         stagger=nombre("stagger", 0.0, 1.0),
         residue=nombre("residue", 0.0, 0.9),
@@ -223,6 +224,7 @@ def decay_payload(decay: Decay) -> dict:
     """L'axe tel que l'interface l'attend."""
     return {
         "frames": decay.frames, "fps": decay.fps,
+        "chained": decay.chained,
         "stagger": decay.stagger, "residue": decay.residue,
         "ripening": decay.ripening, "tearing": decay.tearing,
         "min_segment": decay.min_segment, "max_segment": decay.max_segment,
@@ -281,7 +283,7 @@ def run_export_job(job_id: str, recipe, decay, size, index, images,
 
 
 def run_video_job(job_id: str, recipe, decay, size, images, target: Path):
-    total = count_frames(decay)
+    total = count_frames(decay, len(images))
 
     def frames():
         for done, frame in enumerate(sequence(recipe, decay, size, images), 1):
@@ -602,7 +604,8 @@ class Handler(BaseHTTPRequestHandler):
         size = int(body.get("size") or PREVIEW)
         recipe, images = recipe_from_request(body, self.library, for_size=size)
         decay = decay_from_request(body)
-        index = max(0, min(int(body.get("moment", 0)), count_frames(decay) - 1))
+        total = count_frames(decay, len(images))
+        index = max(0, min(int(body.get("moment", 0)), total - 1))
 
         # L'aperçu découpe sans agrandir la toile : la part gardée y perd du
         # détail, mais le rendu reste assez vif pour qu'on travaille. Le
@@ -618,7 +621,7 @@ class Handler(BaseHTTPRequestHandler):
         # La graine voyage dans l'en-tête : l'interface l'affiche sans
         # avoir à la deviner quand elle a laissé le serveur en tirer une.
         self.send_header("X-Atelier-Seed", str(recipe.seed))
-        self.send_header("X-Atelier-Frames", str(count_frames(decay)))
+        self.send_header("X-Atelier-Frames", str(total))
         self.send_header("Cache-Control", "no-store")
         self.end_headers()
         self.wfile.write(payload)
@@ -647,14 +650,14 @@ class Handler(BaseHTTPRequestHandler):
         job_id = uuid.uuid4().hex[:12]
         with JOBS_LOCK:
             JOBS[job_id] = {"state": "en cours", "done": 0,
-                            "total": count_frames(decay)}
+                            "total": count_frames(decay, len(images))}
 
         threading.Thread(
             target=run_video_job,
             args=(job_id, recipe, decay, size, images, target),
             daemon=True,
         ).start()
-        self._json({"job": job_id, "total": count_frames(decay),
+        self._json({"job": job_id, "total": count_frames(decay, len(images)),
                     "seed": recipe.seed})
 
     def _job(self, job_id: str):
@@ -670,7 +673,8 @@ class Handler(BaseHTTPRequestHandler):
         size = int(body.get("size", 4000))
         recipe, images = recipe_from_request(body, self.library)
         decay = decay_from_request(body)
-        index = max(0, min(int(body.get("moment", 0)), count_frames(decay) - 1))
+        index = max(0, min(int(body.get("moment", 0)),
+                           count_frames(decay, len(images)) - 1))
 
         self.output_dir.mkdir(parents=True, exist_ok=True)
         suffix = ".png" if body.get("format") == "png" else ".jpg"

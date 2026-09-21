@@ -280,6 +280,51 @@ détail, mais le rendu reste assez vif pour qu'on travaille.
 
 ## L'axe du temps
 
+### Deux manières de faire passer le temps
+
+Deux boutons en tête du panneau **Le temps**.
+
+**Superposées** est la pile : toutes les images sont là en même temps,
+pondérées par leur saillance, et le temps défait l'ensemble. Ce que
+l'évidement creuse finit par déboucher sur le fond, puisqu'il n'y a plus rien
+dessous. C'est le prolongement des compositions de 2024.
+
+**Enchaînées** est le montage des vidéos de février 2025, repris de
+`datamoshing4.py`. Il ne compose rien : à chaque instant il n'y a qu'une
+image, ou deux en train de se relayer. Chez l'original, tout tient en une
+ligne :
+
+```python
+combined = processed2 * (1.0 - mask1) + processed1 * mask1
+```
+
+Les deux parts sont complémentaires : ce que la première abandonne, la
+seconde l'occupe entièrement. La couverture vaut donc exactement 1 partout, à
+tout instant — **il n'y a jamais de fond**, et c'est ce qui distingue ces
+vidéos des compositions. Mesuré sur un axe entier en plein cadre, la part
+noire ne dépasse pas un demi pour cent ; sur la pile, la dernière image en
+est à plus de 40 %.
+
+`Décalage entre couches`, `Ce qui résiste` et `Disparition` n'ont pas d'objet
+en enchaîné : il n'y a pas de couches à décaler, rien à faire survivre — une
+transition doit arriver au bout, sinon l'image suivante n'apparaîtrait jamais
+entière — et la toile étant toujours pleine, il n'y a pas de présence à
+éteindre. Le panneau les met hors d'atteinte plutôt que de les laisser
+répondre dans le vide.
+
+Le reste de l'axe s'applique aux deux : le mûrissement fait grossir les
+matières qu'on a posées, la déchirure dose le tri et le décalage RVB.
+
+Deux choses changent par rapport à l'original. L'axe **garde la longueur
+qu'on lui a donnée** et se partage entre les transitions, au nombre entier
+près : ajouter une image resserre les enchaînements au lieu d'allonger la
+vidéo dans le dos. Et le premier instant d'une transition **montre l'image
+telle qu'on l'a réglée**, comme le premier instant de la pile ; comme la
+transition précédente finit sur cette même image intacte, les enchaînements
+se raccordent sans saut.
+
+### Parcourir l'axe
+
 La barre sous l'aperçu va de **intact** à **composté**. À gauche, la
 composition telle qu'on l'a réglée. En avançant, chaque couche se trie par
 segments, perd l'alignement de ses canaux, s'arrache par plaques et laisse
@@ -312,11 +357,11 @@ temps ne fait alors plus que mûrir ce qu'on a posé, et évider.
 
 | Réglage | Ce qu'il fait |
 |---|---|
-| Durée | La longueur de l'axe, en images. Elle ne dépend pas du nombre d'images choisies : une image de plus est une couche, pas une diapositive. |
+| Durée | La longueur de l'axe, en images. Superposées, elle ne dépend pas du nombre d'images : une image de plus est une couche, pas une diapositive. Enchaînées, elle se partage entre les transitions. |
 | Mûrissement | De combien les matières posées s'intensifient au bout de l'axe. C'est ce qui lie la décomposition à ce qu'on a choisi. |
 | Déchirure | La part qu'y prend le tri par canaux et le décalage RVB. À zéro, le temps ne fait plus que mûrir et évider. |
-| Décalage entre couches | À 0 tout pourrit ensemble. Au maximum, les couches s'effacent l'une après l'autre. Ce qui est posé en dernier part en premier. |
-| Ce qui résiste | La part la plus dense de chaque couche, encore là à la fin. À 0, l'axe s'éteint au noir. |
+| Décalage entre couches | À 0 tout pourrit ensemble. Au maximum, les couches s'effacent l'une après l'autre. Ce qui est posé en dernier part en premier. Superposées seulement. |
+| Ce qui résiste | La part la plus dense de chaque couche, encore là à la fin. À 0, l'axe s'éteint au noir. Superposées seulement. |
 | Déchirure la plus courte / la plus longue | La longueur des bandes triées. Les rapports entre canaux sont conservés : c'est leur écart qui sépare les couleurs, pas leur valeur. |
 | Allongement | De combien les bandes s'étirent à mesure que l'image se défait. |
 | Décalage RVB | La séparation des canaux rouge et bleu, qui croît avec le temps. |

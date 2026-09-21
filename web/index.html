@@ -284,6 +284,11 @@
   .duo button:first-child { border-radius: 3px 0 0 3px; }
   .duo button:last-child { border-radius: 0 3px 3px 0; }
   .duo button.tenu { background: var(--braise); color: #1A1508; border-color: var(--braise); }
+  .duo.pleine { margin-bottom: 8px; }
+  .duo.pleine button { flex: 1; }
+  /* Un réglage que le mode en cours n'emploie pas : visible, pour qu'on
+     sache qu'il existe, mais hors d'atteinte. */
+  .reglage.inerte { opacity: .3; pointer-events: none; }
   .rangee { display: flex; gap: 5px; }
 
   /* Un tirage en grand format demande des dizaines de secondes : sans
@@ -448,6 +453,11 @@
 
     <section>
       <h2>Le temps</h2>
+      <div class="duo pleine" id="mode-temps">
+        <button data-temps="pile" class="tenu">Superposées</button>
+        <button data-temps="chaine">Enchaînées</button>
+      </div>
+      <p class="note" id="note-mode"></p>
       <p class="note" id="note-temps"></p>
       <div class="reglage">
         <div class="ligne"><label for="frames">Durée</label><span class="valeur" id="v-frames"></span></div>
@@ -613,7 +623,7 @@ function reglagesNeufs() {
 }
 
 const etat = {
-  totalFrames: 48, pleinCadre: false,
+  totalFrames: 48, pleinCadre: false, enchaine: false,
   cadre: null,               // la part de toile qu'on garde, en fractions
   trace: false,              // on est en train de la dessiner
   disponibles: [], choisies: [],
@@ -927,6 +937,7 @@ function corps(extra = {}) {
     bleed: parseFloat($('#bavure').value),
     full_frame: etat.pleinCadre,
     fade: parseFloat($('#disparition').value) / 100,
+    chained: etat.enchaine,
     // Pendant le tracé, l'aperçu montre la toile entière : on a besoin de
     // voir ce qu'on écarte pour placer le cadre.
     crop: etat.trace ? null : etat.cadre,
@@ -1109,6 +1120,7 @@ function appliquer(r) {
   if (r.bleed !== undefined) $('#bavure').value = r.bleed;
   if (r.fade !== undefined) $('#disparition').value = Math.round(r.fade * 100);
   if (r.full_frame !== undefined) poserCadrage(r.full_frame);
+  if (r.chained !== undefined) poserMode(r.chained);
   etat.cadre = r.crop ? r.crop.slice() : null;
 
   const versReglages = liste => {
@@ -1261,6 +1273,25 @@ function montrerTemps() {
   peindreJauges();
 }
 
+// Les réglages que l'enchaînement n'emploie pas. Il n'y a pas de couches à
+// décaler, rien à faire survivre — une transition doit arriver au bout, sinon
+// l'image suivante n'apparaîtrait jamais entière — et la toile étant toujours
+// pleine, il n'y a pas de présence à éteindre.
+const SANS_OBJET_ENCHAINE = ['stagger', 'residue', 'disparition'];
+
+function poserMode(enchaine) {
+  etat.enchaine = !!enchaine;
+  document.querySelectorAll('[data-temps]').forEach(b =>
+    b.classList.toggle('tenu', (b.dataset.temps === 'chaine') === etat.enchaine));
+  SANS_OBJET_ENCHAINE.forEach(id => {
+    const reglage = $('#' + id).closest('.reglage');
+    if (reglage) reglage.classList.toggle('inerte', etat.enchaine);
+  });
+  $('#note-mode').textContent = etat.enchaine
+    ? "Chaque image se défait pour découvrir la suivante. La toile reste pleine du début à la fin : c'est le montage des vidéos de 2025, et il n'y a jamais de fond."
+    : "Toutes les images sont là en même temps et se compostent ensemble. Ce que l'évidement creuse finit par déboucher sur le fond.";
+}
+
 function poserCadrage(plein) {
   etat.pleinCadre = !!plein;
   document.querySelectorAll('[data-cadre]').forEach(b =>
@@ -1365,6 +1396,10 @@ document.querySelectorAll('[data-cadre]').forEach(b => {
   b.onclick = () => { poserCadrage(b.dataset.cadre === 'plein'); demanderRendu(); };
 });
 
+document.querySelectorAll('[data-temps]').forEach(b => {
+  b.onclick = () => { poserMode(b.dataset.temps === 'chaine'); demanderRendu(); };
+});
+
 $('#hasard').onclick = async () => {
   const bouton = $('#hasard');
   bouton.disabled = true;
@@ -1390,6 +1425,7 @@ $('#famille').innerHTML =
 batirMatieres();
 brancherCadre();
 brancherAides();
+poserMode(false);
 montrerMorsure();
 montrerTemps();
 chargerSources();
