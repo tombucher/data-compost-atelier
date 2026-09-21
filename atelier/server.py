@@ -235,6 +235,38 @@ def decay_payload(decay: Decay) -> dict:
     }
 
 
+# Les noms déjà pris par un tirage en cours. Sur le disque, un fichier
+# n'existe qu'une fois écrit : deux tirages lancés coup sur coup
+# choisiraient donc le même nom, et le second écraserait le premier au
+# moment d'écrire. On retient donc aussi les noms promis.
+NOMS_LOCK = threading.Lock()
+NOMS_PROMIS: set[str] = set()
+
+
+def nom_libre(dossier: Path, tige: str, suffixe: str) -> Path:
+    """Un chemin qui n'écrase rien.
+
+    La graine ne suffit pas à nommer un tirage : la même graine rendue avec
+    d'autres matières, un autre seuil ou dans l'autre mode donne une tout
+    autre image. Un tirage qui porterait le nom d'un ancien l'effacerait
+    sans rien demander — et c'est du travail perdu, pas un fichier
+    intermédiaire. Le premier garde le nom nu, les suivants prennent un
+    rang.
+
+    Un nom promis le reste jusqu'à la fin du serveur, même si le tirage
+    échoue : sauter un numéro ne coûte rien, écraser une image coûte cher.
+    """
+    with NOMS_LOCK:
+        rang = 1
+        while True:
+            nom = f"{tige}{suffixe}" if rang == 1 else f"{tige}_{rang}{suffixe}"
+            chemin = dossier / nom
+            if not chemin.exists() and str(chemin) not in NOMS_PROMIS:
+                NOMS_PROMIS.add(str(chemin))
+                return chemin
+            rang += 1
+
+
 # Les tirages vidéo durent des minutes : ils partent en tâche de fond et
 # l'interface suit leur avancement, plutôt que de laisser le navigateur en
 # attente sur une requête qui n'aboutit pas.
@@ -646,7 +678,7 @@ class Handler(BaseHTTPRequestHandler):
         size = int(body.get("size", 2000))
 
         self.output_dir.mkdir(parents=True, exist_ok=True)
-        target = self.output_dir / f"atelier_{recipe.seed}_{size}.mp4"
+        target = nom_libre(self.output_dir, f"atelier_{recipe.seed}_{size}", ".mp4")
         job_id = uuid.uuid4().hex[:12]
         with JOBS_LOCK:
             JOBS[job_id] = {"state": "en cours", "done": 0,
@@ -681,7 +713,8 @@ class Handler(BaseHTTPRequestHandler):
         # L'instant figure dans le nom : deux tirages du même axe se
         # distinguent sans avoir à ouvrir les fichiers.
         marque = "" if index == 0 else f"_t{index}"
-        target = self.output_dir / f"atelier_{recipe.seed}{marque}_{size}{suffix}"
+        target = nom_libre(
+            self.output_dir, f"atelier_{recipe.seed}{marque}_{size}", suffix)
 
         job_id = uuid.uuid4().hex[:12]
         with JOBS_LOCK:

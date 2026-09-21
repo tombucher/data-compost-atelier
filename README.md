@@ -94,6 +94,14 @@ dans `sorties/`, avec sa recette à l'intérieur. Le calcul se fait en tâche de
 fond : une barre suit les couches, le compteur les secondes, et l'interface
 reste utilisable.
 
+**Un tirage n'en écrase jamais un autre.** Le nom porte la graine, l'instant
+et la taille — `atelier_1234_t24_4000.jpg` —, mais cela ne suffit pas à
+identifier une image : la même graine rendue avec d'autres matières, un autre
+seuil ou dans l'autre mode du temps donne tout autre chose. Si le nom est
+pris, le tirage prend un rang : `atelier_1234_4000_2.jpg`. Un nom déjà promis
+à un tirage en cours compte comme pris, puisqu'un fichier n'existe qu'une fois
+écrit et qu'un grand format demande des minutes.
+
 Les vignettes des matières se recalculent quand la pile change, en une
 seconde environ. Elles montrent chaque matière seule et à force marquée : ce
 sont des échantillons, comme un nuancier, pas l'aperçu du réglage courant.
