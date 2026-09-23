@@ -6,344 +6,467 @@
 <title>Atelier</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..650&display=swap" rel="stylesheet">
 <style>
-  /* Les couleurs du compost, pas celles d'un studio. Le fond reste sombre —
-     on juge des images dessus — mais brun de terre plutôt que gris neutre.
-     Les deux accents portent chacun un sens : le vert dit ce qui est vivant
-     et en cours, l'ocre dit la matière qu'on a posée. */
+  /* Un fond presque neutre : on juge des couleurs dessus, et un fond brun les
+     réchauffait toutes. Il reste un cran au-dessus du noir, pour qu'on voie
+     où finit la toile — son fond à elle est un vrai noir.
+
+     Un seul accent, l'ocre : ce qu'on a posé sur l'image, et ce qu'on en
+     tire. Les modes et les cadrages, eux, s'inversent en os, sans couleur.
+     Le vert acide qui disait « en cours » a disparu : il concurrençait les
+     images, et personne ne savait quand il valait quoi. */
   :root {
-    --terre: #161310;
-    --humus: #1E1914;
-    --litiere: #272019;
-    --radicelle: #3A3026;
-    --mycelium: #EAE4D6;
-    --spore: #958A76;
-    --ferment: #C2D83A;
-    --braise: #D0803C;
-    --police: 'IBM Plex Sans', ui-sans-serif, system-ui, -apple-system, sans-serif;
+    color-scheme: dark;
+    --fond: #121110;
+    --panneau: #191816;
+    --releve: #221F1C;
+    --trait: #2D2A26;
+    --trait-fort: #46413A;
+    --os: #ECE6D9;
+    --cendre: #8F887C;
+    --ocre: #D59B3C;
+    --ocre-voile: #33260F;
+    --alerte: #EC8B79;
+    --police: 'Bricolage Grotesque', ui-sans-serif, system-ui, -apple-system, sans-serif;
   }
 
   * { box-sizing: border-box; }
   html, body { height: 100%; }
   body {
     margin: 0;
-    background: var(--terre);
-    color: var(--mycelium);
-    font: 400 13px/1.5 var(--police);
-    font-variant-numeric: tabular-nums;
-    display: flex; flex-direction: column;
+    background: var(--fond);
+    color: var(--os);
+    font: 400 13px/1.45 var(--police);
+    font-optical-sizing: auto;
+    display: grid; grid-template-rows: auto minmax(0, 1fr);
     overflow: hidden;
   }
+  /* `display: grid` ou `flex` l'emporteraient sur l'attribut hidden. */
+  [hidden] { display: none !important; }
+  :focus-visible { outline: 2px solid var(--os); outline-offset: 2px; }
 
-  /* --- barre du haut : ce qui vaut pour toute la séance --- */
-  .bandeau {
-    display: grid; grid-template-columns: 1fr auto 1fr;
-    align-items: center; gap: 12px;
-    padding: 0 14px; height: 48px; flex: 0 0 auto;
-    background: var(--humus);
-    border-bottom: 1px solid var(--radicelle);
+  /* --- éléments de base -------------------------------------------------- */
+  button {
+    font: inherit; font-size: 13px; color: var(--os);
+    background: var(--releve); border: 1px solid var(--trait-fort);
+    border-radius: 5px; padding: 6px 11px; cursor: pointer; white-space: nowrap;
   }
-  .bandeau .cote { display: flex; align-items: center; gap: 12px; min-width: 0; }
-  .bandeau .cote.droite { justify-content: flex-end; }
-  .marque { font-weight: 600; font-size: 15px; letter-spacing: -0.01em; }
-  /* Le menu de veine ne règle que le bouton voisin : ils forment un objet. */
-  .tirage-hasard { display: flex; gap: 5px; align-items: center; }
-  .tirage-hasard select {
-    width: auto; border-color: #6B7A1C; color: #DCE79B;
+  button:hover:not(:disabled) { border-color: #5E574D; }
+  button:disabled { opacity: .38; cursor: default; }
+  button.principal {
+    background: var(--ocre); border-color: var(--ocre); color: #1C1407; font-weight: 600;
   }
-  .marque span { color: var(--braise); }
-  .bandeau .grandit { flex: 1; }
+  button.principal:hover:not(:disabled) { background: #E2AA4C; border-color: #E2AA4C; }
 
-  /* --- la scène : la pile | l'aperçu | les matières --- */
-  .scene {
-    flex: 1; min-height: 0;
-    display: grid;
-    grid-template-columns: 238px minmax(0, 1fr) 304px;
+  select, input[type=number] {
+    font: inherit; font-size: 13px; color: var(--os);
+    background: var(--releve); border: 1px solid var(--trait-fort);
+    border-radius: 5px; padding: 5px 8px; min-width: 0;
+  }
+  input[type=number] { width: 100%; font-variant-numeric: tabular-nums; }
+  input[type=checkbox] { accent-color: var(--ocre); cursor: pointer; margin: 0; }
+
+  /* Un curseur fin, rempli jusqu'à sa valeur : on lit d'un coup d'œil où il
+     est posé, sans aller chercher le chiffre. `--p` est tenu par le script. */
+  input[type=range] {
+    -webkit-appearance: none; appearance: none;
+    width: 100%; height: 18px; margin: 0; background: transparent;
+    cursor: pointer; --p: 50%; --remplit: var(--os);
+  }
+  input[type=range]::-webkit-slider-runnable-track {
+    height: 2px; border-radius: 1px;
+    background: linear-gradient(90deg, var(--remplit) var(--p), var(--trait-fort) var(--p));
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 13px; height: 13px; margin-top: -5.5px; border-radius: 50%;
+    background: var(--os); border: 2px solid var(--panneau);
+  }
+  input[type=range]::-moz-range-track { height: 2px; background: var(--trait-fort); }
+  input[type=range]::-moz-range-progress { height: 2px; background: var(--remplit); }
+  input[type=range]::-moz-range-thumb {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: var(--os); border: 2px solid var(--panneau);
   }
 
-  aside {
-    background: var(--humus);
-    overflow-y: auto; overflow-x: hidden;
-    padding: 14px;
-    display: flex; flex-direction: column; gap: 20px;
+  .duo {
+    display: inline-flex; gap: 2px; padding: 2px;
+    background: var(--fond); border: 1px solid var(--trait); border-radius: 7px;
   }
-  .scene > aside:first-child { border-right: 1px solid var(--radicelle); }
-  .scene > aside:last-child { border-left: 1px solid var(--radicelle); }
+  .duo button {
+    border: 0; background: transparent; color: var(--cendre);
+    border-radius: 5px; padding: 5px 12px;
+  }
+  .duo button:hover:not(:disabled) { color: var(--os); }
+  .duo button.tenu { background: var(--os); color: var(--fond); font-weight: 500; }
+
+  .note { margin: 0; font-size: 12px; color: var(--cendre); line-height: 1.45; }
 
   h2 {
-    font-size: 12px; font-weight: 600; margin: 0 0 6px;
-    display: flex; align-items: baseline; gap: 6px;
+    margin: 0 0 8px; font-size: 13px; font-weight: 600;
+    display: flex; align-items: baseline; gap: 7px;
   }
-  h2 em { font-style: normal; font-weight: 400; color: var(--spore); font-size: 11px; }
-  .note { font-size: 11.5px; color: var(--spore); line-height: 1.45; margin: 0 0 6px; }
+  h2 small { font-size: 12px; font-weight: 400; color: var(--cendre); }
 
-  /* --- la pile : une coupe, pas une liste ---
-     La dernière image posée est en haut, parce que c'est elle que le temps
-     défait la première. Le trait vert sur son flanc montre où elle en est. */
+  /* Un réglage : son nom, sa valeur lue, son aide, puis le curseur. */
+  .reglage { margin-bottom: 14px; }
+  .ligne { display: flex; align-items: center; gap: 8px; min-height: 20px; }
+  .ligne label { flex: 1; cursor: pointer; user-select: none; }
+  .valeur {
+    color: var(--cendre); font-size: 12px; font-variant-numeric: tabular-nums;
+    text-align: right; min-width: 3.2em;
+  }
+  /* Un réglage que le mode en cours n'emploie pas : on le voit, pour savoir
+     qu'il existe, mais il est hors d'atteinte. */
+  .reglage.inerte { opacity: .3; pointer-events: none; }
+
+  /* L'aide s'ouvre au clic, jamais au survol, et se tient en bout de ligne :
+     on traverse le panneau pour atteindre un curseur sans déclencher de
+     bulles en chemin. */
+  .aide {
+    flex: 0 0 auto; width: 18px; height: 18px; padding: 0;
+    border-radius: 50%; font-size: 10.5px; line-height: 1; font-weight: 600;
+    background: transparent; border: 1px solid var(--trait-fort); color: var(--cendre);
+  }
+  .aide:hover:not(:disabled) { color: var(--os); border-color: var(--cendre); }
+  .aide.ouverte { background: var(--os); border-color: var(--os); color: var(--fond); }
+  #bulle {
+    position: fixed; z-index: 60; max-width: 290px; display: none;
+    background: #0B0A09; color: var(--os); border: 1px solid var(--trait-fort);
+    border-radius: 7px; padding: 10px 12px; font-size: 12.5px; line-height: 1.5;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, .55);
+  }
+
+  /* --- le bandeau : ce qui vaut pour toute la séance --------------------- */
+  .bandeau {
+    display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    align-items: center; gap: 16px;
+    height: 54px; padding: 0 16px;
+    background: var(--panneau); border-bottom: 1px solid var(--trait);
+  }
+  .bandeau .gauche, .bandeau .droite { display: flex; align-items: center; gap: 14px; min-width: 0; }
+  .bandeau .droite { justify-content: flex-end; }
+  .marque {
+    font-size: 19px; font-weight: 600; letter-spacing: -0.025em;
+    font-variation-settings: "opsz" 60;
+  }
+  .marque span { color: var(--ocre); }
+  #dossier { max-width: 240px; }
+
+  .hasard { position: relative; display: inline-flex; }
+  .hasard > button { border-radius: 0; }
+  .hasard > button:first-child { border-radius: 5px 0 0 5px; }
+  .hasard > button:nth-child(2) { border-radius: 0 5px 5px 0; border-left: 0; padding: 6px 9px; }
+  .menu {
+    position: absolute; right: 0; top: calc(100% + 6px); z-index: 50;
+    width: 250px; padding: 6px;
+    background: #0B0A09; border: 1px solid var(--trait-fort); border-radius: 8px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, .55);
+  }
+  .menu .note { padding: 6px 8px 8px; }
+  .menu button {
+    display: flex; width: 100%; align-items: center; gap: 8px;
+    background: transparent; border: 0; border-radius: 5px; padding: 7px 8px; text-align: left;
+  }
+  .menu button:hover { background: var(--releve); }
+  .menu button::before {
+    content: ""; width: 7px; height: 7px; border-radius: 50%;
+    border: 1px solid var(--cendre); flex: 0 0 auto;
+  }
+  .menu button[aria-checked=true]::before { background: var(--ocre); border-color: var(--ocre); }
+
+  /* --- la scène : la pile | l'image et son temps | les réglages ---------- */
+  .scene {
+    min-height: 0;
+    display: grid; grid-template-columns: 264px minmax(0, 1fr) 328px;
+  }
+
+  .gauche-panneau {
+    background: var(--panneau); border-right: 1px solid var(--trait);
+    overflow-y: auto; padding: 16px 14px 20px;
+    display: flex; flex-direction: column; gap: 24px;
+  }
+
+  /* La pile : une coupe, pas une liste. La dernière image posée est en haut,
+     parce que c'est elle que le temps défait la première ; le trait sur son
+     flanc montre où elle en est. */
   .pile { display: flex; flex-direction: column; gap: 2px; }
   .strate {
-    display: grid; grid-template-columns: 5px 34px 1fr auto;
-    align-items: center; gap: 8px;
-    background: var(--litiere); border: 1px solid var(--radicelle);
-    padding: 5px 6px 5px 0; position: relative; border-radius: 2px;
+    display: grid; grid-template-columns: 3px 42px minmax(0, 1fr) auto;
+    align-items: center; gap: 10px;
+    padding: 4px 4px 4px 0; border-radius: 6px;
   }
+  .strate:hover { background: var(--releve); }
+  .strate.visee { background: var(--releve); box-shadow: inset 0 0 0 1px var(--trait-fort); }
   .strate .jauge {
-    align-self: stretch; background: #332A20; position: relative; overflow: hidden;
+    align-self: stretch; background: var(--trait); border-radius: 2px;
+    position: relative; overflow: hidden;
   }
   .strate .jauge i {
-    position: absolute; inset: auto 0 0 0; background: var(--ferment);
-    transition: height .18s ease;
+    position: absolute; left: 0; right: 0; bottom: 0;
+    background: var(--os); transition: height .18s ease;
   }
   .strate img {
-    width: 34px; height: 34px; object-fit: cover; display: block;
-    border-radius: 2px; cursor: pointer;
+    width: 42px; height: 42px; object-fit: cover; display: block;
+    border-radius: 4px; cursor: pointer;
   }
-  .strate .nom { overflow: hidden; }
+  .strate .nom { min-width: 0; }
   .strate .nom b {
-    display: block; font-weight: 500; font-size: 11.5px;
+    display: block; font-weight: 500;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
-  .strate .nom i { font-style: normal; color: var(--spore); font-size: 10.5px; }
-  .strate.propre .nom i { color: var(--braise); }
-  .strate.visee { outline: 1px solid var(--braise); outline-offset: -1px; }
-  .strate .mains { display: flex; gap: 1px; }
+  .strate .nom i { font-style: normal; color: var(--cendre); font-size: 12px; }
+  .strate.propre .nom i { color: var(--ocre); }
+  .strate .mains { display: flex; }
   .strate .mains button {
-    width: 20px; height: 20px; padding: 0; font-size: 10px; line-height: 1;
-    background: transparent; border-color: transparent; color: var(--spore);
+    width: 26px; height: 26px; padding: 0; font-size: 11px;
+    background: transparent; border-color: transparent; color: var(--cendre);
   }
-  .strate .mains button:hover { background: var(--radicelle); color: var(--mycelium); }
+  .strate .mains button:hover:not(:disabled) { color: var(--os); border-color: var(--trait-fort); }
 
-  /* --- la réserve : les images du dossier --- */
-  .reserve { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
-  .galet {
-    position: relative; aspect-ratio: 1; cursor: pointer; padding: 0;
-    border: 1px solid transparent; border-radius: 2px; overflow: hidden;
-    background: var(--litiere);
+  .reserve, .tirages { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+  .tirages { grid-template-columns: repeat(3, 1fr); }
+  .galet, .tirage {
+    position: relative; aspect-ratio: 1; padding: 0; border: 0;
+    border-radius: 4px; overflow: hidden; background: var(--releve);
   }
-  .galet img { width: 100%; height: 100%; object-fit: cover; display: block; opacity: .6; }
-  .galet:hover img { opacity: .9; }
-  .galet.prise { border-color: var(--braise); }
-  .galet.prise img { opacity: 1; }
+  .galet img, .tirage img {
+    width: 100%; height: 100%; object-fit: cover; display: block;
+    transition: opacity .12s ease;
+  }
+  .galet img { opacity: .5; }
+  .galet:hover img, .galet.prise img { opacity: 1; }
+  /* Un contour et non une ombre intérieure : l'image la recouvrirait. */
+  .galet.prise { outline: 2px solid var(--ocre); outline-offset: -2px; }
   .galet .rang {
-    position: absolute; right: 2px; bottom: 2px;
-    background: var(--braise); color: #1A1508;
-    font-size: 9.5px; font-weight: 600; line-height: 1;
-    padding: 2px 4px; border-radius: 2px;
+    position: absolute; left: 3px; top: 3px;
+    min-width: 17px; padding: 2px 4px; border-radius: 3px;
+    background: var(--ocre); color: #1C1407;
+    font-size: 11px; font-weight: 650; line-height: 1.1; text-align: center;
+  }
+  .tirage:hover { outline: 1px solid var(--os); outline-offset: -1px; }
+  .tirage.incomplet { opacity: .35; cursor: not-allowed; }
+  /* Le tirage qu'on vient d'écrire s'allume un instant, pour qu'on le
+     retrouve dans la liste. */
+  .tirage.neuf { outline: 2px solid transparent; outline-offset: -2px; animation: neuf 2.4s ease-out; }
+  @keyframes neuf {
+    0%, 40% { outline-color: var(--ocre); }
+    100% { outline-color: transparent; }
   }
 
-  /* --- l'aperçu et l'axe --- */
+  /* --- le centre : l'image, puis son temps ------------------------------- */
   main {
-    display: flex; flex-direction: column; align-items: center;
-    justify-content: center; gap: 16px; padding: 18px; min-height: 0;
+    min-width: 0; min-height: 0;
+    display: grid; grid-template-rows: auto minmax(0, 1fr) auto;
+    justify-items: center; gap: 10px;
+    padding: 12px 22px 16px;
+  }
+  .large { width: min(100%, 820px); }
+  .barre-image { display: flex; align-items: center; gap: 8px; min-height: 30px; }
+  .etat { flex: 1; font-size: 12.5px; color: var(--cendre); }
+  .etat.erreur { color: var(--alerte); }
+  .etat.consigne { color: var(--os); }
+  .dit-cadre { font-size: 12px; color: var(--cendre); font-variant-numeric: tabular-nums; }
+
+  .plateau {
+    width: 100%; min-height: 0; overflow: hidden;
+    display: flex; align-items: center; justify-content: center;
   }
   .scene-apercu { position: relative; line-height: 0; }
-  #apercu {
-    max-width: 100%; max-height: calc(100vh - 250px);
-    background: #000; display: block; box-shadow: 0 0 0 1px var(--radicelle);
+  #apercu { display: block; background: #000; box-shadow: 0 0 0 1px var(--trait); }
+  #apercu.attente { opacity: .5; }
+  .scene-apercu.attente::after {
+    content: ""; position: absolute; left: 0; right: 0; top: 0; height: 2px;
+    background: linear-gradient(90deg, transparent, var(--os), transparent);
+    animation: passe 1.1s linear infinite;
   }
+  @keyframes passe { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
   /* Tracer un cadre : ce qu'on garde reste clair, le reste s'assombrit. */
   .scene-apercu.tracable #apercu { cursor: crosshair; }
   .cadre {
-    position: absolute; border: 1px solid var(--ferment);
-    box-shadow: 0 0 0 9999px rgba(10, 8, 6, .62);
-    pointer-events: none;
+    position: absolute; border: 1px solid var(--os);
+    box-shadow: 0 0 0 9999px rgba(10, 9, 8, .62); pointer-events: none;
   }
-  .voile {
-    position: absolute; inset: 0; pointer-events: none;
-    border: 1px dashed var(--ferment);
-  }
-  /* Tout ce qui touche au cadre se tient au même endroit, sous l'aperçu :
-     comment les images occupent la toile, et quelle part on en tire. */
-  .barre-cadre { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-  .barre-cadre .dit { font-size: 11px; color: var(--ferment); }
-  /* `display: block` l'emporterait sur l'attribut hidden, et l'image
-     cassée resterait visible tant qu'aucune composition n'est rendue. */
-  [hidden] { display: none !important; }
-  #apercu.attente { opacity: .45; }
-  /* Une barre vivante en haut de l'aperçu pendant le calcul : l'opacité
-     seule ne distingue pas un rendu en cours d'un rendu terminé pâle. */
-  .scene-apercu.attente::after {
-    content: ""; position: absolute; left: 0; right: 0; top: 0; height: 2px;
-    background: linear-gradient(90deg, transparent, var(--ferment), transparent);
-    animation: passe 1.1s linear infinite;
-  }
-  @keyframes passe {
-    from { transform: translateX(-100%); }
-    to { transform: translateX(100%); }
-  }
-  .vide { color: var(--spore); text-align: center; max-width: 34ch; line-height: 1.6; }
-  .vide strong { color: var(--mycelium); font-weight: 500; display: block; margin-bottom: 4px; }
+  .voile { position: absolute; inset: 0; pointer-events: none; border: 1px dashed var(--os); }
 
-  /* L'axe est la pièce centrale du dispositif : il en a la place.
-     Le dégradé va du plein au vide, dans le sens de la décomposition. */
-  .axe { width: min(660px, 100%); }
-  .axe .rail { position: relative; height: 26px; }
-  .axe .fond {
-    position: absolute; inset: 7px 0; border-radius: 2px;
-    background: linear-gradient(90deg, var(--braise) 0%, #6E5A34 45%, #332A20 100%);
-    opacity: .55;
-  }
-  .axe input[type=range] {
-    position: absolute; inset: 0; width: 100%; margin: 0;
-    background: transparent; -webkit-appearance: none; appearance: none;
-  }
-  .axe input[type=range]::-webkit-slider-runnable-track { height: 26px; background: transparent; }
-  .axe input[type=range]::-webkit-slider-thumb {
-    -webkit-appearance: none; appearance: none;
-    width: 9px; height: 26px; border-radius: 2px; cursor: ew-resize;
-    background: var(--ferment); border: none; box-shadow: 0 0 0 1px var(--terre);
-  }
-  .axe input[type=range]::-moz-range-thumb {
-    width: 9px; height: 26px; border-radius: 2px; cursor: ew-resize;
-    background: var(--ferment); border: none;
-  }
-  .axe .legende {
-    display: flex; justify-content: space-between; margin-top: 3px;
-    font-size: 11px; color: var(--spore);
-  }
-  .axe .legende b { color: var(--ferment); font-weight: 500; }
-  .etat { font-size: 11px; color: var(--spore); min-height: 15px; text-align: center; }
+  .vide { text-align: center; max-width: 36ch; }
+  .vide strong { display: block; font-size: 18px; font-weight: 600; margin-bottom: 6px;
+                 font-variation-settings: "opsz" 48; }
+  .vide p { margin: 0 0 16px; color: var(--cendre); line-height: 1.55; }
 
-  /* --- les matières : une par ligne, comme une strate de la pile ---
-     En deux colonnes, les noms se tronquaient et la vignette réservait
-     133 px de haut — vides tant qu'aucune image n'est posée. En ligne, la
-     vignette tient dans la hauteur du nom et ne laisse pas de trou. */
-  .matieres { display: flex; flex-direction: column; gap: 3px; }
-  .bloc { display: flex; flex-direction: column; }
-
-  .matiere {
-    display: grid; grid-template-columns: 40px 1fr auto auto;
-    align-items: center; gap: 9px;
-    border: 1px solid var(--radicelle); background: var(--litiere);
-    padding: 0 8px 0 0; cursor: pointer; text-align: left;
-    color: var(--mycelium); border-radius: 2px; overflow: hidden;
+  /* Le temps. La pellicule montre l'axe entier d'un coup : on voit où va la
+     décomposition avant de la parcourir. La tête de lecture la traverse. */
+  .temps { display: flex; flex-direction: column; }
+  .pellicule {
+    position: relative; height: 58px;
+    border-radius: 5px; overflow: hidden; background: #000;
+    box-shadow: 0 0 0 1px var(--trait);
   }
-  .matiere:hover { border-color: #57493A; }
-  .matiere .apercu {
-    width: 40px; height: 40px; display: block;
-    background: #0E0C0A center/cover no-repeat;
+  .images-pellicule { display: flex; height: 100%; gap: 1px; background: var(--fond); }
+  .images-pellicule img { flex: 1; min-width: 0; height: 100%; object-fit: cover; display: block; }
+  .pellicule.attente .images-pellicule { opacity: .45; transition: opacity .2s; }
+  /* Le curseur court du milieu de la première vignette au milieu de la
+     dernière : chaque image y est à sa place exacte. */
+  .pellicule input[type=range] {
+    position: absolute; top: 0; bottom: 0; height: 100%;
+    left: var(--demi, 5%); width: calc(100% - 2 * var(--demi, 5%));
+    cursor: ew-resize;
   }
-  .matiere .nom { font-size: 12.5px; font-weight: 500; }
-  .matiere .valeur { color: var(--spore); font-size: 11px; }
-
-  .matiere.active { border-color: var(--braise); background: #3A2A16; }
-  .matiere.active .nom { color: #F3D9B4; }
-  .matiere.active .valeur { color: var(--braise); }
-
-  /* Les réglages n'apparaissent que si la matière est posée, et juste sous
-     elle : elle ne change pas de place quand on l'active. */
-  .detail {
-    padding: 9px 10px 11px; margin-bottom: 2px;
-    border: 1px solid var(--braise); border-top: 0;
-    border-radius: 0 0 2px 2px; background: #221B12;
+  .pellicule input[type=range]::-webkit-slider-runnable-track { height: 58px; background: transparent; }
+  /* La tête : un trait d'os cerné de noir, pour rester lisible sur une
+     vignette claire comme sur une sombre, et une languette en haut. */
+  .pellicule input[type=range]::-webkit-slider-thumb {
+    width: 14px; height: 58px; margin-top: 0; border: 0; border-radius: 0;
+    background:
+      linear-gradient(var(--os), var(--os)) center top / 12px 7px no-repeat,
+      linear-gradient(90deg, transparent 5px, #000 5px, #000 6px, var(--os) 6px,
+                      var(--os) 8px, #000 8px, #000 9px, transparent 9px);
   }
-  .formes { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 8px; }
+
+  .pellicule input[type=range]::-moz-range-track { height: 58px; background: transparent; }
+  .pellicule input[type=range]::-moz-range-progress { background: transparent; }
+  .pellicule input[type=range]::-moz-range-thumb {
+    width: 2px; height: 58px; border: 0; border-radius: 0; background: var(--os);
+  }
+  .legende {
+    display: flex; justify-content: space-between; align-items: baseline;
+    margin-top: 5px; font-size: 12px; color: var(--cendre);
+  }
+  .legende b { color: var(--os); font-weight: 500; font-variant-numeric: tabular-nums; }
+
+  /* Deux rangs : le mode et l'accès aux réglages fins, puis les trois
+     réglages qu'on touche le plus. Sur un seul rang, ils débordaient et
+     prenaient au hasard la hauteur de l'image. */
+  .rang-mode { display: flex; align-items: center; gap: 14px; margin-top: 12px; }
+  .rang-mode .mode { display: flex; align-items: center; gap: 6px; }
+  .indice { flex: 1; margin: 0; font-size: 12px; color: var(--ocre); text-align: right; }
+  .commandes-temps {
+    display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 26px;
+    margin-top: 12px;
+  }
+  .commandes-temps .reglage { margin: 0; }
+  button.enfonce { background: var(--os); color: var(--fond); border-color: var(--os); }
+
+  #volet-temps h3 { margin: 22px 0 10px; font-size: 13px; font-weight: 600; }
+  #volet-temps .bascules { display: flex; flex-direction: column; gap: 8px; }
+
+  /* --- à droite : les réglages, puis le tirage toujours en vue ----------- */
+  .droite-panneau {
+    background: var(--panneau); border-left: 1px solid var(--trait);
+    min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr) auto;
+  }
+  .onglets { display: flex; gap: 4px; padding: 10px 14px 0; border-bottom: 1px solid var(--trait); }
+  .onglet {
+    background: transparent; border: 0; border-radius: 0;
+    border-bottom: 2px solid transparent; margin-bottom: -1px;
+    padding: 8px 8px 9px; color: var(--cendre); font-size: 14px; font-weight: 500;
+  }
+  .onglet:hover:not(:disabled) { color: var(--os); }
+  .onglet[aria-selected=true] { color: var(--os); border-bottom-color: var(--os); }
+  .volet { overflow-y: auto; padding: 14px 14px 18px; }
+  .volet > .note { margin-bottom: 14px; }
+
+  /* Sur quelle couche on règle : des vignettes, pas un menu. */
+  .cibles { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
+  .puce {
+    height: 34px; padding: 0 11px; border-radius: 17px; font-size: 12.5px;
+    background: transparent; color: var(--cendre); border-color: var(--trait-fort);
+  }
+  .puce.vignette { width: 34px; padding: 0; overflow: hidden; position: relative; }
+  .puce.vignette img { width: 100%; height: 100%; object-fit: cover; display: block; opacity: .6; }
+  .puce.vignette.propre::after {
+    content: ""; position: absolute; right: 3px; top: 3px;
+    width: 7px; height: 7px; border-radius: 50%; background: var(--ocre);
+    box-shadow: 0 0 0 1.5px var(--panneau);
+  }
+  .puce.tenue { border-color: var(--os); color: var(--fond); background: var(--os); }
+  .puce.vignette.tenue { box-shadow: 0 0 0 1px var(--os); }
+  .puce.vignette.tenue img { opacity: 1; }
+  .dit-cible { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; min-height: 18px; }
+  .dit-cible .note { flex: 1; }
+  .dit-cible button { padding: 3px 8px; font-size: 12px; }
+
+  /* Les matières : une par ligne. Posée, sa vignette s'allume et son
+     interrupteur passe à l'ocre ; ses réglages s'ouvrent juste dessous,
+     alignés sur son nom. */
+  .matieres { display: flex; flex-direction: column; gap: 1px; }
+  .matiere { display: flex; align-items: center; gap: 6px; }
+  .bascule {
+    flex: 1; min-width: 0;
+    display: grid; grid-template-columns: 44px minmax(0, 1fr) auto 28px;
+    align-items: center; gap: 10px;
+    padding: 4px 8px 4px 4px; border: 0; border-radius: 7px;
+    background: transparent; text-align: left;
+  }
+  .bascule:hover:not(:disabled) { background: var(--releve); }
+  .bascule .apercu {
+    width: 44px; height: 44px; border-radius: 5px;
+    background: #0B0A09 center / cover no-repeat; opacity: .45;
+    transition: opacity .15s ease;
+  }
+  .bascule .nom { font-size: 14px; font-weight: 500; }
+  .bascule .valeur { min-width: 0; }
+  .interrupteur {
+    width: 28px; height: 16px; border-radius: 8px; position: relative;
+    background: var(--trait-fort); transition: background .15s ease;
+  }
+  .interrupteur::after {
+    content: ""; position: absolute; top: 2px; left: 2px;
+    width: 12px; height: 12px; border-radius: 50%;
+    background: var(--cendre); transition: transform .15s ease, background .15s ease;
+  }
+  .matiere.active .bascule { background: var(--releve); }
+  .matiere.active .apercu { opacity: 1; }
+  .matiere.active .valeur { color: var(--ocre); }
+  .matiere.active .interrupteur { background: var(--ocre); }
+  .matiere.active .interrupteur::after { transform: translateX(12px); background: #1C1407; }
+
+  .detail { padding: 6px 8px 14px 58px; }
+  .detail input[type=range] { --remplit: var(--ocre); }
+  .detail .reglage { margin-bottom: 10px; }
+  .formes { display: flex; flex-wrap: wrap; gap: 4px; margin: 2px 0 12px; }
   .forme {
-    width: 30px; height: 30px; padding: 0; border-radius: 2px;
-    background: #F0EADC center/cover no-repeat;
-    border: 1px solid var(--radicelle); cursor: pointer;
+    width: 28px; height: 28px; padding: 0; border-radius: 4px;
+    background: #EFE9DC center / cover no-repeat; border: 1px solid var(--trait-fort);
   }
-  .forme.active { border-color: var(--ferment); box-shadow: 0 0 0 1px var(--ferment); }
+  .forme.active { box-shadow: 0 0 0 2px var(--ocre); border-color: var(--ocre); }
+  .detail .ligne input[type=checkbox] { margin-right: 2px; }
 
-  /* --- réglages génériques --- */
-  .reglage { margin-bottom: 11px; }
-  .ligne { display: flex; align-items: center; gap: 7px; margin-bottom: 3px; }
-  .ligne label { flex: 1; cursor: pointer; user-select: none; font-size: 12px; }
-  .ligne .valeur { color: var(--spore); font-size: 11px; }
-  .sous { margin: 8px 0 0 10px; padding-left: 8px; border-left: 1px solid var(--radicelle); }
-  .sous label { font-size: 11px; color: var(--spore); }
-
-  input[type=range] { width: 100%; accent-color: var(--ferment); cursor: pointer; }
-  input[type=checkbox] { accent-color: var(--braise); cursor: pointer; }
-  input[type=number], input[type=text], select {
-    background: var(--terre); color: var(--mycelium);
-    border: 1px solid var(--radicelle); border-radius: 3px;
-    padding: 5px 7px; font: inherit; font-size: 12px; width: 100%;
-    font-variant-numeric: tabular-nums;
+  .tirer {
+    border-top: 1px solid var(--trait); padding: 14px 14px 16px;
+    display: flex; flex-direction: column; gap: 8px; background: var(--panneau);
   }
-  .bandeau select { width: auto; max-width: 230px; }
-
-  button {
-    background: var(--litiere); color: var(--mycelium);
-    border: 1px solid var(--radicelle); border-radius: 3px;
-    padding: 6px 10px; font: inherit; font-size: 12px; cursor: pointer;
-    white-space: nowrap;
-  }
-  button:hover:not(:disabled) { background: #302719; border-color: #57493A; }
-  button.pousse {
-    background: var(--ferment); color: #1B1F04;
-    border-color: var(--ferment); font-weight: 600;
-  }
-  button.pousse:hover:not(:disabled) { background: #D3E84B; }
-  button:disabled { opacity: .4; cursor: default; }
-  :focus-visible { outline: 2px solid var(--ferment); outline-offset: 1px; }
-
-  .duo { display: flex; gap: 1px; }
-  .duo button { border-radius: 0; }
-  .duo button:first-child { border-radius: 3px 0 0 3px; }
-  .duo button:last-child { border-radius: 0 3px 3px 0; }
-  .duo button.tenu { background: var(--braise); color: #1A1508; border-color: var(--braise); }
-  .duo.pleine { margin-bottom: 8px; }
-  .duo.pleine button { flex: 1; }
-  /* Un réglage que le mode en cours n'emploie pas : visible, pour qu'on
-     sache qu'il existe, mais hors d'atteinte. */
-  .reglage.inerte { opacity: .3; pointer-events: none; }
-  .rangee { display: flex; gap: 5px; }
-
-  /* Un tirage en grand format demande des dizaines de secondes : sans
-     nouvelles, l'attente passe pour un programme arrêté. */
-  .jauge-travail {
-    height: 4px; background: var(--radicelle); border-radius: 2px;
-    overflow: hidden; margin: 8px 0 4px;
-  }
-  .jauge-travail .remplit {
-    height: 100%; width: 0; background: var(--ferment);
-    transition: width .25s ease;
-  }
-  .resultat { font-size: 11px; color: var(--spore); line-height: 1.45; word-break: break-all; }
-  .resultat.abouti { color: var(--ferment); }
-
-  .tirage {
-    padding: 5px 7px; border: 1px solid var(--radicelle); border-radius: 2px;
-    cursor: pointer; font-size: 11px; margin-bottom: 3px; background: var(--litiere);
-  }
-  .tirage:hover { border-color: #57493A; }
-  .tirage b { color: var(--braise); font-weight: 500; }
-  .tirage em { color: var(--spore); font-style: normal; display: block; }
-  .tirage.incomplet { opacity: .45; cursor: not-allowed; }
-
-  /* L'aide s'ouvre au clic, jamais au survol : on traverse le panneau pour
-     atteindre un curseur, on ne veut pas déclencher des bulles en chemin. */
-  .aide {
-    flex: 0 0 auto; width: 15px; height: 15px; padding: 0;
-    border-radius: 50%; font-size: 9px; line-height: 1;
-    background: transparent; border: 1px solid var(--radicelle); color: var(--spore);
-  }
-  .aide:hover { background: var(--radicelle); color: var(--mycelium); }
-  .aide.ouverte { background: var(--ferment); border-color: var(--ferment); color: #1B1F04; }
-  #bulle {
-    position: fixed; z-index: 60; max-width: 272px; display: none;
-    background: #0D0B09; color: var(--mycelium); border: 1px solid #4A3E30;
-    border-radius: 4px; padding: 9px 11px; font-size: 11.5px; line-height: 1.5;
-    box-shadow: 0 8px 26px rgba(0,0,0,.6);
-  }
+  .rangee { display: flex; gap: 6px; align-items: center; }
+  .rangee > .etire { flex: 1; min-width: 0; }
+  .rangee label { color: var(--cendre); font-size: 12px; }
+  .jauge-travail { height: 3px; background: var(--trait); border-radius: 2px; overflow: hidden; }
+  .jauge-travail .remplit { height: 100%; width: 0; background: var(--ocre); transition: width .25s ease; }
+  .resultat { margin: 0; font-size: 12px; color: var(--cendre); line-height: 1.45; overflow-wrap: anywhere; }
+  .resultat strong { display: block; color: var(--os); font-weight: 500; }
+  .resultat.erreur { color: var(--alerte); }
 
   /* En dessous de trois colonnes, les panneaux s'empilent et la page défile
-     d'un bloc. Garder les hauteurs du mode large ferait chevaucher l'aperçu
-     et les panneaux, et étirerait chaque strate sur toute la largeur. */
+     d'un bloc. Ces règles viennent en dernier : placées plus haut, les règles
+     qu'elles corrigent les annuleraient. */
   @media (max-width: 1100px) {
-    body { overflow: auto; height: auto; }
-    .scene { display: block; }
-    aside, main { overflow: visible; min-height: 0; }
-    .scene > aside { border: 0; border-top: 1px solid var(--radicelle); }
-    .pile { display: grid; grid-template-columns: repeat(auto-fill, minmax(238px, 1fr)); gap: 4px; }
-    .reserve { grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); }
-    .matieres { max-width: 560px; }
-    main { padding: 22px 14px; }
-    #apercu { max-height: 66vh; }
+    body { overflow: auto; height: auto; display: block; }
+    .bandeau { height: auto; padding: 10px 14px; display: flex; flex-wrap: wrap; gap: 10px 16px; }
+    .bandeau .droite { margin-left: auto; }
+    /* L'image d'abord : c'est elle qu'on règle. */
+    .scene { display: flex; flex-direction: column; }
+    main { order: -1; }
+    .gauche-panneau, .droite-panneau { border: 0; border-top: 1px solid var(--trait); overflow: visible; }
+    .droite-panneau { display: block; }
+    .volet { overflow: visible; }
+    main { padding: 14px; }
+    .plateau { height: min(78vw, 70vh); }
+    .reserve { grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); }
+    .tirages { grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); }
   }
-
+  @media (max-width: 560px) {
+    .commandes-temps .reglage { max-width: none; }
+  }
   @media (prefers-reduced-motion: reduce) {
     * { transition: none !important; animation: none !important; }
   }
@@ -351,84 +474,128 @@
 </head>
 <body>
 
-<div id="bulle"></div>
+<div id="bulle" role="tooltip"></div>
 
 <header class="bandeau">
-  <div class="cote">
+  <div class="gauche">
     <div class="marque">Atelier<span>.</span></div>
-    <select id="dossier" title="Où l'atelier prend ses images"></select>
+    <select id="dossier" aria-label="Dossier d'images"></select>
   </div>
-  <div class="duo" id="cadrage" title="Comment les images occupent la toile">
+
+  <div class="duo" id="cadrage" role="group" aria-label="Comment les images occupent la toile">
     <button data-cadre="pose" class="tenu">Dans le cadre</button>
     <button data-cadre="plein">Plein cadre</button>
   </div>
-  <div class="cote droite">
-    <div class="tirage-hasard">
-    <button class="pousse" id="hasard">Au hasard</button>
-      <select id="famille" aria-label="Veine du tirage"
-              title="Quelle matière le tirage met au centre. Elle sera toujours présente, mais rarement seule : le tirage lui adjoint souvent sa compagne habituelle."></select>
+
+  <div class="droite">
+    <div class="hasard">
+      <button id="hasard">Au hasard</button>
+      <button id="veine-ouvrir" aria-haspopup="true" aria-expanded="false"
+              aria-label="Choisir la matière de départ du hasard">▾</button>
+      <div class="menu" id="veine" role="menu" hidden>
+        <p class="note">Le hasard compose tout : images, matières, réglages. On peut lui demander de partir d'une matière — elle sera toujours là, rarement seule.</p>
+      </div>
     </div>
   </div>
 </header>
 
 <div class="scene">
 
-  <aside>
+  <aside class="gauche-panneau" aria-label="Images">
     <section>
-      <h2>La pile <em id="compte-pile"></em></h2>
-      <p class="note" id="note-pile">Prenez des images ci-dessous. La dernière posée se décompose la première.</p>
+      <h2>La pile <small id="compte-pile"></small></h2>
+      <p class="note" id="note-pile">Prenez des images dans le dossier. La dernière posée se décompose la première.</p>
       <div class="pile" id="pile"></div>
     </section>
 
     <section>
-      <h2>Le dossier <em id="compte-reserve"></em></h2>
+      <h2>Le dossier <small id="compte-reserve"></small></h2>
       <div class="reserve" id="reserve"></div>
-      <p class="note" id="racine" style="margin-top:6px"></p>
     </section>
 
     <section>
-      <h2>Reprendre</h2>
-      <div id="tirages"></div>
+      <h2>Reprendre un tirage</h2>
+      <div class="tirages" id="tirages"></div>
     </section>
   </aside>
 
   <main>
-    <div class="scene-apercu" id="scene-apercu" hidden>
-      <img id="apercu" alt="Aperçu de la composition">
-      <div class="cadre" id="cadre" hidden></div>
-      <div class="voile" id="voile" hidden></div>
-    </div>
-    <div class="barre-cadre" id="outils-cadre" hidden>
-      <button id="recadrer">Recadrer</button>
+    <div class="barre-image large">
+      <span class="etat" id="etat" role="status"></span>
+      <span class="dit-cadre" id="dit-cadre"></span>
       <button id="decadrer" hidden>Tout le cadre</button>
-      <span class="dit" id="dit-cadre"></span>
+      <button id="recadrer" hidden>Recadrer</button>
     </div>
-    <div class="vide" id="vide">
-      <strong>Rien sur l'établi.</strong>
-      Prenez deux ou trois images dans le dossier, ou laissez le hasard choisir.
+
+    <div class="plateau" id="plateau">
+      <div class="scene-apercu" id="scene-apercu" hidden>
+        <img id="apercu" alt="Aperçu de la composition">
+        <div class="cadre" id="cadre" hidden></div>
+        <div class="voile" id="voile" hidden></div>
+      </div>
+      <div class="vide" id="vide">
+        <strong>Rien sur l'établi.</strong>
+        <p>Prenez deux ou trois images dans le dossier, ou laissez le hasard composer.</p>
+        <button class="principal" id="hasard-vide">Au hasard</button>
+      </div>
     </div>
-    <div class="axe" id="axe" hidden>
-      <div class="rail">
-        <div class="fond"></div>
+
+    <div class="temps large" id="temps-zone" hidden>
+      <div class="pellicule" id="pellicule">
+        <div class="images-pellicule" id="images-pellicule"></div>
         <input type="range" id="temps" min="0" max="47" step="1" value="0"
-               aria-label="Avancement de la décomposition">
+               aria-label="Instant de la décomposition">
       </div>
-      <div class="legende">
-        <span>intact</span><b id="v-temps">1 / 48</b><span>composté</span>
+      <div class="legende"><span>intact</span><b id="v-temps">1 / 48</b><span>composté</span></div>
+
+      <div class="rang-mode">
+        <div class="mode" data-aide="mode">
+          <div class="duo" role="group" aria-label="Comment le temps passe">
+            <button data-temps="pile" class="tenu">Superposées</button>
+            <button data-temps="chaine">Enchaînées</button>
+          </div>
+        </div>
+        <p class="indice" id="indice-temps">Avancez dans la pellicule pour voir le temps agir.</p>
+        <button id="fins-ouvrir" aria-controls="volet-temps">Réglages fins</button>
+      </div>
+      <div class="commandes-temps">
+        <div class="reglage">
+          <div class="ligne"><label for="frames">Durée</label><span class="valeur" id="v-frames"></span></div>
+          <input type="range" id="frames" min="8" max="240" step="4" value="48">
+        </div>
+        <div class="reglage">
+          <div class="ligne"><label for="ripening">Mûrissement</label><span class="valeur" id="v-ripening"></span></div>
+          <input type="range" id="ripening" min="0" max="4" step="0.1" value="1">
+        </div>
+        <div class="reglage">
+          <div class="ligne"><label for="tearing">Déchirure</label><span class="valeur" id="v-tearing"></span></div>
+          <input type="range" id="tearing" min="0" max="1" step="0.05" value="1">
+        </div>
       </div>
     </div>
-    <div class="etat" id="etat"></div>
   </main>
 
-  <aside>
-    <section>
-      <h2>Matières <em id="note-cible"></em></h2>
-      <select id="cible" title="À quelle couche appliquer ces matières"></select>
-      <div class="matieres" id="matieres" style="margin-top:6px"></div>
-    </section>
+  <aside class="droite-panneau" aria-label="Réglages et tirage">
+    <div class="onglets" role="tablist">
+      <button class="onglet" role="tab" id="onglet-matieres" data-onglet="matieres"
+              aria-selected="true" aria-controls="volet-matieres">Matières</button>
+      <button class="onglet" role="tab" id="onglet-morsure" data-onglet="morsure"
+              aria-selected="false" aria-controls="volet-morsure">Où ça mord</button>
+      <button class="onglet" role="tab" id="onglet-temps" data-onglet="temps"
+              aria-selected="false" aria-controls="volet-temps">Réglages fins</button>
+    </div>
 
-    <section>
-      <h2>Où ça mord</h2>
+    <div class="volet" id="volet-matieres" role="tabpanel" aria-labelledby="onglet-matieres">
+      <div id="zone-cibles" hidden>
+        <div class="cibles" id="cibles" role="group" aria-label="Sur quelle couche régler"></div>
+        <div class="dit-cible"><p class="note" id="dit-cible"></p>
+          <button id="rejoindre" hidden>Suivre le réglage commun</button></div>
+      </div>
+      <div class="matieres" id="matieres"></div>
+    </div>
+
+    <div class="volet" id="volet-morsure" role="tabpanel" aria-labelledby="onglet-morsure" hidden>
+      <p class="note">La carte de saillance repère ce qui attire l'œil. Ces réglages disent où les matières la mordent, et ce qu'elle laisse voir.</p>
       <div class="reglage">
         <div class="ligne"><label for="seuil">Part dégradée</label><span class="valeur" id="v-seuil"></span></div>
         <input type="range" id="seuil" min="0" max="100" step="1" value="60">
@@ -449,28 +616,10 @@
         <div class="ligne"><label for="disparition">Disparition</label><span class="valeur" id="v-disparition"></span></div>
         <input type="range" id="disparition" min="0" max="95" step="1" value="0">
       </div>
-    </section>
+    </div>
 
-    <section>
-      <h2>Le temps</h2>
-      <div class="duo pleine" id="mode-temps">
-        <button data-temps="pile" class="tenu">Superposées</button>
-        <button data-temps="chaine">Enchaînées</button>
-      </div>
-      <p class="note" id="note-mode"></p>
-      <p class="note" id="note-temps"></p>
-      <div class="reglage">
-        <div class="ligne"><label for="frames">Durée</label><span class="valeur" id="v-frames"></span></div>
-        <input type="range" id="frames" min="8" max="240" step="4" value="48">
-      </div>
-      <div class="reglage">
-        <div class="ligne"><label for="ripening">Mûrissement</label><span class="valeur" id="v-ripening"></span></div>
-        <input type="range" id="ripening" min="0" max="4" step="0.1" value="1">
-      </div>
-      <div class="reglage">
-        <div class="ligne"><label for="tearing">Déchirure</label><span class="valeur" id="v-tearing"></span></div>
-        <input type="range" id="tearing" min="0" max="1" step="0.05" value="1">
-      </div>
+    <div class="volet" id="volet-temps" role="tabpanel" aria-labelledby="onglet-temps" hidden>
+      <p class="note">Comment la matière se défait le long de la pellicule. Ces réglages n'agissent qu'une fois le premier instant passé.</p>
       <div class="reglage">
         <div class="ligne"><label for="stagger">Décalage entre couches</label><span class="valeur" id="v-stagger"></span></div>
         <input type="range" id="stagger" min="0" max="1" step="0.05" value="0.45">
@@ -478,6 +627,10 @@
       <div class="reglage">
         <div class="ligne"><label for="residue">Ce qui résiste</label><span class="valeur" id="v-residue"></span></div>
         <input type="range" id="residue" min="0" max="0.6" step="0.02" value="0.12">
+      </div>
+      <div class="reglage">
+        <div class="ligne"><label for="channel_shift">Décalage RVB</label><span class="valeur" id="v-channel_shift"></span></div>
+        <input type="range" id="channel_shift" min="0" max="0.1" step="0.002" value="0.015">
       </div>
       <div class="reglage">
         <div class="ligne"><label for="min_segment">Déchirure la plus courte</label><span class="valeur" id="v-min_segment"></span></div>
@@ -491,66 +644,48 @@
         <div class="ligne"><label for="segment_growth">Allongement</label><span class="valeur" id="v-segment_growth"></span></div>
         <input type="range" id="segment_growth" min="0" max="5" step="0.1" value="1.5">
       </div>
-      <div class="reglage">
-        <div class="ligne"><label for="channel_shift">Décalage RVB</label><span class="valeur" id="v-channel_shift"></span></div>
-        <input type="range" id="channel_shift" min="0" max="0.1" step="0.002" value="0.015">
+      <h3>Fidélité aux vidéos d'origine</h3>
+      <div class="bascules">
+        <div class="ligne"><input type="checkbox" id="enhanced" checked>
+          <label for="enhanced">Trier les canaux séparément</label></div>
+        <div class="ligne"><input type="checkbox" id="channel_quirk" checked>
+          <label for="channel_quirk">Laisser le rouge intact</label></div>
+        <div class="ligne"><input type="checkbox" id="sort_visible" checked>
+          <label for="sort_visible">Trier ce qu'on voit</label></div>
+        <div class="ligne"><input type="checkbox" id="even_dissolve" checked>
+          <label for="even_dissolve">Dissolution régulière</label></div>
       </div>
-    </section>
+    </div>
 
-    <section>
-      <h2>Tirer</h2>
-      <div class="reglage">
-        <div class="ligne"><label for="graine">Graine</label></div>
-        <div class="rangee">
-          <input type="number" id="graine" placeholder="au hasard">
-          <button id="relancer" title="Nouveau tirage">↻</button>
-        </div>
-      </div>
-      <div class="reglage">
-        <div class="ligne"><label for="taille">Format</label></div>
-        <select id="taille">
-          <option value="2000">2000 px — 17 cm</option>
-          <option value="4000" selected>4000 px — 34 cm</option>
-          <option value="6000">6000 px — 51 cm</option>
-          <option value="8000">8000 px — 68 cm</option>
+    <div class="tirer">
+      <div class="rangee">
+        <select id="taille" class="etire" aria-label="Taille du tirage">
+          <option value="2000">2000 px (17 cm)</option>
+          <option value="4000" selected>4000 px (34 cm)</option>
+          <option value="6000">6000 px (51 cm)</option>
+          <option value="8000">8000 px (68 cm)</option>
         </select>
+        <select id="format" aria-label="Format de l'image"><option value="jpg">JPEG</option><option value="png">PNG</option></select>
       </div>
       <div class="rangee">
-        <button class="pousse" id="exporter" style="flex:1">Tirer cet instant</button>
-        <select id="format" style="width:auto"><option value="jpg">JPEG</option><option value="png">PNG</option></select>
+        <button class="principal etire" id="exporter" disabled>Tirer l'image</button>
+        <button class="etire" id="tirer-video" disabled>Tirer la vidéo</button>
       </div>
-      <div class="rangee" style="margin-top:5px">
-        <button id="tirer-video" style="flex:1">Tirer tout l'axe en vidéo</button>
+      <div class="jauge-travail" id="jauge-travail" hidden><div class="remplit" id="remplit"></div></div>
+      <p class="resultat" id="resultat" role="status"></p>
+      <div class="rangee">
+        <label for="graine">Graine</label>
+        <input type="number" id="graine" class="etire" placeholder="au hasard">
+        <button id="relancer">Autre tirage</button>
       </div>
-      <div class="jauge-travail" id="jauge-travail" hidden>
-        <div class="remplit" id="remplit"></div>
-      </div>
-      <p class="resultat" id="resultat"></p>
-    </section>
-
-    <section>
-      <h2>Fidélité</h2>
-      <p class="note">Des comportements de rendu inhabituels, qu'on peut vouloir ou non.</p>
-      <div class="ligne"><input type="checkbox" id="debordement" checked>
-        <label for="debordement">Débordement de saturation</label></div>
-      <div class="ligne"><input type="checkbox" id="enhanced" checked>
-        <label for="enhanced">Trier les canaux séparément</label></div>
-      <div class="ligne"><input type="checkbox" id="channel_quirk" checked>
-        <label for="channel_quirk">Laisser le rouge intact</label></div>
-      <div class="ligne"><input type="checkbox" id="sort_visible" checked>
-        <label for="sort_visible">Trier ce qu'on voit</label></div>
-      <div class="ligne"><input type="checkbox" id="even_dissolve" checked>
-        <label for="even_dissolve">Dissolution régulière</label></div>
-    </section>
+    </div>
   </aside>
 </div>
 
 <script>
 const $ = s => document.querySelector(s);
 
-// Ce que chaque réglage fait à l'image, en une phrase. Le panneau en est
-// plein : une phrase posée sous un curseur se lit comme le commentaire du
-// suivant, donc elles passent toutes en bulle, ouvertes au clic.
+// Ce que chaque réglage fait à l'image, en quelques phrases, ouvert au clic.
 const AIDES = {
   pixelate: "Remplace des blocs carrés par leur couleur moyenne. Le détail s'en va, la couleur reste.",
   bitmap: "Bascule en noir et blanc purs, sans aucun gris. Le curseur mélange ce noir et blanc avec l'image ; à fond, il ne reste que deux valeurs.",
@@ -560,37 +695,33 @@ const AIDES = {
   mosh: "Trie chaque canal de couleur séparément, chacun avec sa longueur et son sens. Les couleurs se décollent les unes des autres.",
   shift: "Déplace le rouge et le bleu en sens opposés. L'image se dédouble en franges colorées.",
   'x-mosh': "Envoie le vert perpendiculairement au rouge et au bleu, ce qui croise les coulées. Décoché, les trois canaux coulent dans le même sens.",
+  debordement: "La saturation est calculée sur des entiers de 0 à 255 : au-delà, les valeurs repassent par le bas — 150 × 2 donne 44 — et les couleurs cassent en aplats inattendus. Seize œuvres de 2024 en dépendent.",
 
   seuil: "Quelle part de l'image les matières attaquent, en partant des zones les plus calmes. À 100 %, tout y passe, sujet compris.",
-  bavure: "De combien les matières débordent de la zone calme. À zéro elles s'y tiennent — or cette zone ne porte que 14 % du poids de la composition, et un tri s'y noie. En montant, elles gagnent le sujet et se voient enfin.",
+  bavure: "De combien les matières débordent de la zone calme, et fondent leur bord au lieu de s'arrêter net. À zéro elles s'y tiennent — or cette zone pèse peu dans la composition, et un tri s'y noie.",
   lissage: "Adoucit la carte de saillance avant de s'en servir. Au minimum, les zones dégradées ont des bords hachés ; en montant, elles se fondent.",
   bords: "Ne garde que le pourtour des zones saillantes, au lieu de leur intérieur. L'image se réduit à un liseré autour de son sujet.",
-  disparition: "Quelle part de la toile s'enfonce dans le noir, en partant du moins saillant. À zéro, la composition rend sa pleine intensité au moindre pixel couvert : la saillance n'arbitre plus qu'entre les couches, et en plein cadre il ne reste aucun noir. En montant, le sujet émerge du fond, et l'évidement du temps débouche vraiment sur du vide.",
+  disparition: "Quelle part de la toile s'enfonce dans le noir, en partant du moins saillant. À zéro, rien ne s'éteint : en plein cadre il ne reste aucun noir. En montant, le sujet émerge du fond. Sans objet quand les images sont enchaînées : la toile y est toujours pleine.",
 
-  frames: "Le nombre d'images entre l'intact et le composté. Ne change pas la composition, seulement la finesse du parcours — et la durée de la vidéo.",
-  ripening: "De combien les matières que vous avez posées s'intensifient au bout de l'axe. La trame grossit, les blocs s'élargissent, le bitmap durcit. C'est ce qui fait que le compostage dépend de ce qu'on a choisi.",
-  tearing: "La part que prend la déchirure — le tri canal par canal et le décalage RVB — dans la décomposition. À zéro, le temps ne fait plus que mûrir ce qu'on a posé, et évider.",
-  stagger: "À zéro, toutes les images pourrissent en même temps. Au maximum, elles s'effacent l'une après l'autre. Celle posée en dernier part toujours la première.",
-  residue: "La part la plus dense de chaque image, encore là à la fin. Un compost finit sur de l'humus ; à zéro, la séquence s'éteint au noir.",
+  mode: "Superposées : toutes les images sont là en même temps et se compostent ensemble ; ce que le temps creuse finit par déboucher sur le fond. Enchaînées : chaque image se défait pour découvrir la suivante, la toile reste pleine du début à la fin — c'est le montage des vidéos de 2025.",
+  frames: "Le nombre d'images entre l'intact et le composté : la finesse du parcours, et la durée de la vidéo. Enchaînées, elles se partagent entre les transitions.",
+  ripening: "De combien les matières posées s'intensifient au bout de l'axe. La trame grossit, les blocs s'élargissent, le bitmap durcit. C'est ce qui fait que le compostage dépend de ce qu'on a choisi.",
+  tearing: "La part que prennent le tri canal par canal et le décalage RVB dans la décomposition. À zéro, le temps ne fait plus que mûrir ce qu'on a posé, et évider.",
+  stagger: "À zéro, toutes les images pourrissent en même temps. Au maximum, elles s'effacent l'une après l'autre ; celle posée en dernier part la première. Images superposées seulement.",
+  residue: "La part la plus dense de chaque image, encore là à la fin. Un compost finit sur de l'humus ; à zéro, la séquence s'éteint au noir. Images superposées seulement.",
   min_segment: "La plus courte des bandes que le tri réordonne. Des bandes courtes donnent un grain nerveux, des bandes longues des coulées.",
   max_segment: "La plus longue des bandes que le tri réordonne. C'est elle qui décide jusqu'où la matière peut s'étirer.",
   segment_growth: "De combien les bandes s'allongent à mesure que l'image se défait. À zéro, la déchirure garde la même échelle du début à la fin.",
   channel_shift: "De combien le rouge et le bleu s'écartent quand la matière pourrit. Nul au premier instant, maximal à la fin.",
-
-  debordement: "La saturation est multipliée dans un tableau d'entiers 8 bits : au-delà de 255, les valeurs repassent par le bas — 150 × 2 donne 44 — et les couleurs cassent.",
   enhanced: "Trie chaque canal à part, ce qui sépare les couleurs. Décoché, les trois canaux se trient ensemble et l'image reste grise.",
-  channel_quirk: "Chaque canal est répliqué en gris avant d'être trié. Comme le rouge ne tire qu'entre deux méthodes sans effet sur un gris, il n'est jamais trié : c'est ce qui donne sa dominante à l'effet.",
-  sort_visible: "Le tri porte sur la zone encore visible. Décoché, il porte sur celle qui disparaît — il ne se voit alors presque pas.",
-  even_dissolve: "Les seuils suivent les quantiles de la saillance, pour que la dissolution occupe tout l'axe. Décoché, l'image se vide en deux ou trois images.",
+  channel_quirk: "L'original ne triait jamais le rouge, par un accident de son code : c'est ce qui donne sa dominante à l'effet. Décoché, les trois canaux se trient.",
+  sort_visible: "Le tri porte sur la zone encore visible. Décoché, il porte sur celle qui disparaît — comme dans l'original, où il ne se voyait presque pas.",
+  even_dissolve: "La dissolution se répartit sur tout l'axe. Décoché, l'image se vide en deux ou trois images, comme dans l'original.",
 
-  graine: "Le nombre d'où sort toute la composition. Il ne sert qu'à revenir sur un tirage pour l'agrandir — il n'oblige à rien répéter.",
-  recadrer: "Trace un cadre sur l'aperçu pour ne garder qu'une part de la composition. Ce n'est pas un rognage : au tirage, la toile est calculée d'autant plus grande que le cadre est petit, pour que la part gardée sorte à la définition demandée.",
-  taille: "La taille du tirage. L'aperçu reste petit pour rester vif ; c'est ici que se décide la définition du fichier écrit.",
+  graine: "Le nombre d'où sort toute la composition. Il sert à revenir sur un tirage pour l'agrandir. Autre tirage en tire un nouveau : mêmes images, mêmes réglages, autres placements.",
 };
 
-// Les matières qui travaillent par lignes acceptent un axe, et chacune a le
-// sien : une trame à 45° sur un tri à l'horizontale est une combinaison
-// qu'un angle commun interdirait.
+// Les matières qui travaillent par lignes acceptent un axe, chacune le sien.
 const EFFETS_ANGLE = ['halftone', 'pixelsort', 'mosh', 'shift'];
 
 // `enPixels` marque les forces exprimées en fraction de toile : elles se
@@ -612,10 +743,22 @@ const FORMES = [
   ['euclidean', 'euclidienne'],
 ];
 
+const VEINES = [
+  ['', "N'importe laquelle", ''],
+  ['halftone', 'La trame', 'de la trame'], ['bitmap', 'Le bitmap', 'du bitmap'],
+  ['pixelate', 'La pixellisation', 'de la pixellisation'],
+  ['saturate', 'La saturation', 'de la saturation'],
+];
+
 const AXE = ['frames', 'stagger', 'residue', 'ripening', 'tearing',
              'min_segment', 'max_segment', 'segment_growth', 'channel_shift'];
 const BASCULES = ['enhanced', 'channel_quirk', 'sort_visible', 'even_dissolve'];
 const MORSURE = ['seuil', 'bavure', 'lissage', 'bords', 'disparition'];
+
+// Ce que l'enchaînement n'emploie pas : pas de couches à décaler, rien à faire
+// survivre — une transition doit arriver au bout —, et la toile étant
+// toujours pleine, pas de présence à éteindre.
+const SANS_OBJET_ENCHAINE = ['stagger', 'residue', 'disparition'];
 
 function reglagesNeufs() {
   return Object.fromEntries(EFFETS.map(
@@ -623,32 +766,51 @@ function reglagesNeufs() {
 }
 
 const etat = {
-  totalFrames: 48, pleinCadre: false, enchaine: false,
+  totalFrames: 48, pleinCadre: false, enchaine: false, veine: '',
   cadre: null,               // la part de toile qu'on garde, en fractions
   trace: false,              // on est en train de la dessiner
   disponibles: [], choisies: [],
   effets: reglagesNeufs(),   // réglage commun
   propres: {},               // réglages propres, par chemin d'image
   cible: '',                 // '' = le réglage commun
-  vignettes: {},             // ce que fait chaque matière, sur ces images-ci
-  vignettesPour: '',         // la sélection à laquelle elles correspondent
+  vignettes: {}, vignettesPour: '',
 };
 
-// Les curseurs éditent soit le réglage commun, soit celui d'une couche
-function reglagesCourants() {
+const nomDe = chemin => chemin.split('/').pop();
+const vignetteDe = chemin => `/api/thumbnail?path=${encodeURIComponent(chemin)}`;
+
+// Regarder une couche ne la détache pas du réglage commun : elle n'a de
+// réglage propre qu'à partir du moment où on y change quelque chose.
+function reglagesLus() {
+  return (etat.cible && etat.propres[etat.cible]) || etat.effets;
+}
+function reglagesEcrits() {
   if (!etat.cible) return etat.effets;
   if (!etat.propres[etat.cible]) {
-    // On part du réglage commun : régler une couche ne repart pas de zéro
     etat.propres[etat.cible] = JSON.parse(JSON.stringify(etat.effets));
   }
   return etat.propres[etat.cible];
 }
+
+// --- les curseurs -----------------------------------------------------------
+function remplir(el) {
+  const min = parseFloat(el.min || 0), max = parseFloat(el.max || 100);
+  const part = max > min ? (parseFloat(el.value) - min) / (max - min) : 0;
+  el.style.setProperty('--p', (Math.min(1, Math.max(0, part)) * 100) + '%');
+}
+function peindreCurseurs() { document.querySelectorAll('input[type=range]').forEach(remplir); }
+document.addEventListener('input', e => { if (e.target.type === 'range') remplir(e.target); });
 
 // --- la pile ----------------------------------------------------------------
 
 // L'avancement d'une couche, repris de `decay.layer_progress` pour que la
 // jauge dise la même chose que le rendu. La dernière posée part la première.
 function avancementCouche(moment, couche, total) {
+  if (etat.enchaine) {
+    // Enchaînées, une image est là pendant sa transition, puis s'en va.
+    const n = Math.max(1, total - 1);
+    return Math.min(1, Math.max(0, moment * n - couche));
+  }
   const decalage = parseFloat($('#stagger').value);
   if (total < 2 || decalage <= 0) return moment;
   const rang = total - 1 - couche;
@@ -664,21 +826,18 @@ function peindrePile() {
   $('#note-pile').hidden = n > 0;
   if (!n) { pile.innerHTML = ''; return; }
 
-  // De haut en bas : la dernière posée d'abord, puisqu'elle part la première
   const ordre = etat.choisies.map((c, i) => ({ chemin: c, couche: i })).reverse();
   pile.innerHTML = ordre.map(({ chemin, couche }) => {
-    const nom = chemin.split('/').pop();
     const propre = !!etat.propres[chemin];
     return `
     <div class="strate ${propre ? 'propre' : ''} ${etat.cible === chemin ? 'visee' : ''}"
          data-chemin="${chemin}">
       <div class="jauge"><i style="height:0%"></i></div>
-      <img src="/api/thumbnail?path=${encodeURIComponent(chemin)}" alt=""
-           title="Régler cette couche à part">
-      <div class="nom"><b>${nom}</b><i>couche ${couche + 1}${propre ? ' · réglée à part' : ''}</i></div>
+      <img src="${vignetteDe(chemin)}" alt="" title="Régler les matières de cette couche">
+      <div class="nom"><b>${nomDe(chemin)}</b><i>couche ${couche + 1}${propre ? ', réglée à part' : ''}</i></div>
       <div class="mains">
-        <button data-monte title="Poser plus haut">▲</button>
-        <button data-retire title="Retirer de la pile">✕</button>
+        <button data-monte title="Poser plus haut" aria-label="Poser plus haut" ${couche === n - 1 ? 'disabled' : ''}>▲</button>
+        <button data-retire title="Retirer de la pile" aria-label="Retirer de la pile">✕</button>
       </div>
     </div>`;
   }).join('');
@@ -695,18 +854,15 @@ function peindrePile() {
     };
     el.querySelector('[data-retire]').onclick = () => {
       etat.choisies = etat.choisies.filter(c => c !== chemin);
+      delete etat.propres[chemin];
       if (etat.cible === chemin) etat.cible = '';
       peindreChoix(); demanderRendu();
     };
-    el.querySelector('img').onclick = () => {
-      etat.cible = etat.cible === chemin ? '' : chemin;
-      peindreChoix();
-    };
+    el.querySelector('img').onclick = () => viser(etat.cible === chemin ? '' : chemin);
   });
   peindreJauges();
 }
 
-// Où en est chaque couche à l'instant courant.
 function peindreJauges() {
   const moment = etat.totalFrames > 1
     ? parseInt($('#temps').value) / (etat.totalFrames - 1) : 0;
@@ -724,7 +880,7 @@ async function changerDossier(chemin) {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ path: chemin }),
   })).json();
-  if (d.error) { $('#etat').textContent = d.error; return; }
+  if (d.error) { direEtat(d.error, 'erreur'); return; }
   // On change de série : la sélection et les réglages propres ne suivent pas
   etat.choisies = []; etat.propres = {}; etat.cible = '';
   poserSources(d);
@@ -736,35 +892,32 @@ async function chargerSources() {
 }
 
 function poserSources(d) {
-  $('#racine').textContent = d.root;
   etat.disponibles = d.images;
-  $('#compte-reserve').textContent =
-    `${d.images.length} image${d.images.length > 1 ? 's' : ''}`;
+  $('#compte-reserve').textContent = `${d.images.length} image${d.images.length > 1 ? 's' : ''}`;
 
-  // Le menu liste le dossier courant puis ceux d'à côté qui contiennent des
-  // images. Le dossier des tirages en fait partie — on peut recomposter ses
-  // propres sorties — mais il faut dire lequel c'est.
+  // Le dossier courant, puis ceux d'à côté qui contiennent des images. Celui
+  // des tirages en fait partie — on peut recomposter ses propres sorties —
+  // mais il faut dire lequel c'est.
   const voisins = d.neighbours || [];
-  const nom = v => v.path === d.output ? `${v.name} — vos tirages` : v.name;
+  const nom = v => v.path === d.output ? `${v.name}, vos tirages` : v.name;
   $('#dossier').innerHTML =
-    `<optgroup label="dossier en cours">`
-    + `<option value="${d.root}">${d.root.split('/').pop()} (${d.images.length})</option>`
-    + `</optgroup>`
+    `<option value="${d.root}">${nomDe(d.root)} (${d.images.length})</option>`
     + (voisins.length
-       ? `<optgroup label="dossiers voisins">`
+       ? `<optgroup label="Dossiers voisins">`
          + voisins.map(v => `<option value="${v.path}">${nom(v)} (${v.count})</option>`).join('')
          + `</optgroup>`
        : '');
   $('#dossier').value = d.root;
+  $('#dossier').title = d.root;
 
   if (!d.images.length) {
-    $('#reserve').innerHTML = '<p class="note">Aucune image ici.</p>';
+    $('#reserve').innerHTML = '<p class="note" style="grid-column:1/-1">Aucune image dans ce dossier. Choisissez-en un autre en haut à gauche.</p>';
     peindreChoix();
     return;
   }
   $('#reserve').innerHTML = d.images.map(i => `
-    <button class="galet" data-chemin="${i.path}" title="${i.name}">
-      <img loading="lazy" src="/api/thumbnail?path=${encodeURIComponent(i.path)}" alt="${i.name}">
+    <button class="galet" data-chemin="${i.path}" title="${i.name}" aria-pressed="false">
+      <img loading="lazy" src="${vignetteDe(i.path)}" alt="${i.name}">
       <span class="rang" hidden></span>
     </button>`).join('');
 
@@ -772,7 +925,8 @@ function poserSources(d) {
     el.onclick = () => {
       const chemin = el.dataset.chemin;
       const rang = etat.choisies.indexOf(chemin);
-      if (rang === -1) etat.choisies.push(chemin); else etat.choisies.splice(rang, 1);
+      if (rang === -1) etat.choisies.push(chemin);
+      else { etat.choisies.splice(rang, 1); delete etat.propres[chemin]; }
       peindreChoix(); demanderRendu();
     };
   });
@@ -783,31 +937,54 @@ function peindreChoix() {
   document.querySelectorAll('.galet').forEach(el => {
     const rang = etat.choisies.indexOf(el.dataset.chemin);
     el.classList.toggle('prise', rang !== -1);
+    el.setAttribute('aria-pressed', String(rang !== -1));
     const marque = el.querySelector('.rang');
     marque.hidden = rang === -1;
     marque.textContent = rang === -1 ? '' : rang + 1;
   });
+  if (etat.cible && !etat.choisies.includes(etat.cible)) etat.cible = '';
   peindrePile();
   peindreCible();
+  peindreTirer();
   chargerVignettes();
 }
 
+// --- sur quelle couche --------------------------------------------------------
+function viser(chemin) {
+  etat.cible = chemin;
+  montrerOnglet('matieres');
+  peindrePile();
+  peindreCible();
+}
+
 function peindreCible() {
-  const choix = $('#cible');
-  const avant = etat.cible;
-  choix.innerHTML = '<option value="">Toute la pile</option>'
-    + etat.choisies.map((c, i) =>
-        `<option value="${c}">Couche ${i + 1} — ${c.split('/').pop()}</option>`).join('');
-  choix.value = etat.choisies.includes(avant) ? avant : '';
-  etat.cible = choix.value;
-  $('#note-cible').textContent = etat.cible ? 'sur cette couche' : 'sur toute la pile';
+  const n = etat.choisies.length;
+  $('#zone-cibles').hidden = n < 2;
+  const cibles = $('#cibles');
+  cibles.innerHTML =
+    `<button class="puce ${etat.cible ? '' : 'tenue'}" data-cible="">Toute la pile</button>`
+    + etat.choisies.map((c, i) => `
+      <button class="puce vignette ${etat.cible === c ? 'tenue' : ''} ${etat.propres[c] ? 'propre' : ''}"
+              data-cible="${c}" title="Couche ${i + 1} : ${nomDe(c)}"
+              aria-label="Couche ${i + 1}" aria-pressed="${etat.cible === c}">
+        <img src="${vignetteDe(c)}" alt=""></button>`).join('');
+  cibles.querySelectorAll('.puce').forEach(b => { b.onclick = () => viser(b.dataset.cible); });
+
+  const rang = etat.choisies.indexOf(etat.cible) + 1;
+  const propre = etat.cible && etat.propres[etat.cible];
+  $('#dit-cible').textContent = !etat.cible
+    ? "Ces matières valent pour toutes les couches qui n'ont pas de réglage propre."
+    : propre
+      ? `La couche ${rang} a ses propres matières.`
+      : `La couche ${rang} suit le réglage commun. Y changer une matière la règle à part.`;
+  $('#rejoindre').hidden = !propre;
   peindreEffets();
 }
 
 // --- les matières -----------------------------------------------------------
 
 // Une matière qu'on active à l'aveugle est une matière qu'on n'essaie pas :
-// chaque tuile montre ce que la matière fait, sur les images en cours.
+// chaque ligne montre ce que la matière fait, sur les images en cours.
 async function chargerVignettes() {
   const signature = etat.choisies.join('|');
   if (!etat.choisies.length || signature === etat.vignettesPour) return;
@@ -824,77 +1001,79 @@ async function chargerVignettes() {
 function batirMatieres() {
   $('#matieres').innerHTML = EFFETS.map(e => `
     <div class="bloc" id="b-${e.cle}">
-    <button class="matiere" id="m-${e.cle}" data-cle="${e.cle}" aria-pressed="false">
-      <span class="apercu" id="ap-${e.cle}"></span>
-      <span class="nom">${e.nom}</span>
-      <span class="valeur" id="v-${e.cle}"></span>
-    </button>
-    <div class="detail" id="d-${e.cle}" hidden>
-      <div class="ligne">
-        <label for="f-${e.cle}">force</label><span class="valeur" id="vf-${e.cle}"></span>
+      <div class="matiere" id="m-${e.cle}" data-cle="${e.cle}">
+        <button class="bascule" id="t-${e.cle}" aria-pressed="false" aria-controls="d-${e.cle}">
+          <span class="apercu" id="ap-${e.cle}"></span>
+          <span class="nom">${e.nom}</span>
+          <span class="valeur" id="v-${e.cle}"></span>
+          <span class="interrupteur" aria-hidden="true"></span>
+        </button>
       </div>
-      <input type="range" id="f-${e.cle}" min="${e.min}" max="${e.max}"
-             step="${e.pas}" value="${e.defaut}">
-      ${e.cle === 'halftone' ? `<div class="formes" id="formes"></div>` : ''}
-      ${EFFETS_ANGLE.includes(e.cle) ? `
-      <div class="sous">
-        <div class="ligne"><label for="a-${e.cle}">axe</label><span class="valeur" id="va-${e.cle}"></span></div>
-        <input type="range" id="a-${e.cle}" min="0" max="175" step="5" value="0">
-        ${e.cle === 'mosh' ? `<div class="ligne" style="margin-top:5px">
-          <input type="checkbox" id="x-mosh">
-          <label for="x-mosh">croiser les canaux</label></div>` : ''}
-      </div>` : ''}
-    </div>
+      <div class="detail" id="d-${e.cle}" hidden>
+        <div class="reglage">
+          <div class="ligne"><label for="f-${e.cle}">Force</label><span class="valeur" id="vf-${e.cle}"></span></div>
+          <input type="range" id="f-${e.cle}" min="${e.min}" max="${e.max}" step="${e.pas}" value="${e.defaut}">
+        </div>
+        ${e.cle === 'halftone' ? `<div class="formes" id="formes" role="group" aria-label="Forme du point"></div>` : ''}
+        ${EFFETS_ANGLE.includes(e.cle) ? `
+        <div class="reglage">
+          <div class="ligne"><label for="a-${e.cle}">Axe</label><span class="valeur" id="va-${e.cle}"></span></div>
+          <input type="range" id="a-${e.cle}" min="0" max="175" step="5" value="0">
+        </div>` : ''}
+        ${e.cle === 'mosh' ? `
+        <div class="ligne"><input type="checkbox" id="x-mosh">
+          <label for="x-mosh">Croiser les canaux</label></div>` : ''}
+        ${e.cle === 'saturate' ? `
+        <div class="ligne"><input type="checkbox" id="debordement" checked>
+          <label for="debordement">Laisser les couleurs casser</label></div>` : ''}
+      </div>
     </div>`).join('');
 
   $('#formes').innerHTML = FORMES.map(([cle, nom]) =>
-    `<button class="forme" data-forme="${cle}" title="trame ${nom}" aria-label="trame ${nom}"
+    `<button class="forme" data-forme="${cle}" title="Point ${nom}" aria-label="Point ${nom}"
              style="background-image:url(/api/motif?shape=${cle})"></button>`).join('');
 
   EFFETS.forEach(e => {
-    $(`#m-${e.cle}`).onclick = () => {
-      const r = reglagesCourants()[e.cle];
+    $(`#t-${e.cle}`).onclick = () => {
+      const r = reglagesEcrits()[e.cle];
       r.actif = !r.actif;
-      peindreEffets(); demanderRendu();
+      peindreCible(); peindrePile(); demanderRendu();
     };
     $(`#f-${e.cle}`).oninput = () => {
-      reglagesCourants()[e.cle].force = parseFloat($(`#f-${e.cle}`).value);
+      reglagesEcrits()[e.cle].force = parseFloat($(`#f-${e.cle}`).value);
       afficherValeur(e); demanderRendu();
     };
     const axe = $(`#a-${e.cle}`);
     if (axe) axe.oninput = () => {
-      reglagesCourants()[e.cle].angle = parseFloat(axe.value);
+      reglagesEcrits()[e.cle].angle = parseFloat(axe.value);
       $(`#va-${e.cle}`).textContent = axe.value + '°';
       demanderRendu();
     };
   });
 
   $('#x-mosh').onchange = () => {
-    reglagesCourants().mosh.croise = $('#x-mosh').checked;
+    reglagesEcrits().mosh.croise = $('#x-mosh').checked;
     demanderRendu();
   };
+  $('#debordement').onchange = demanderRendu;
   document.querySelectorAll('.forme').forEach(b => {
     b.onclick = () => {
-      reglagesCourants().halftone.forme = b.dataset.forme;
+      reglagesEcrits().halftone.forme = b.dataset.forme;
       peindreEffets(); demanderRendu();
     };
   });
 }
 
 function peindreEffets() {
-  const reglages = reglagesCourants();
+  const reglages = reglagesLus();
   EFFETS.forEach(e => {
     const r = reglages[e.cle];
-    const tuile = $(`#m-${e.cle}`);
-    tuile.classList.toggle('active', r.actif);
-    tuile.setAttribute('aria-pressed', String(r.actif));
+    $(`#m-${e.cle}`).classList.toggle('active', r.actif);
+    $(`#t-${e.cle}`).setAttribute('aria-pressed', String(r.actif));
     $(`#d-${e.cle}`).hidden = !r.actif;
     $(`#f-${e.cle}`).value = r.force;
-
-
     const vue = etat.vignettes[e.cle];
     $(`#ap-${e.cle}`).style.backgroundImage = vue ? `url(${vue})` : 'none';
-
     const axe = $(`#a-${e.cle}`);
     if (axe) { axe.value = r.angle || 0; $(`#va-${e.cle}`).textContent = axe.value + '°'; }
     afficherValeur(e);
@@ -902,10 +1081,11 @@ function peindreEffets() {
   $('#x-mosh').checked = !!reglages.mosh.croise;
   document.querySelectorAll('.forme').forEach(b =>
     b.classList.toggle('active', b.dataset.forme === (reglages.halftone.forme || 'round')));
+  peindreCurseurs();
 }
 
 function afficherValeur(e) {
-  const { actif, force } = reglagesCourants()[e.cle];
+  const { actif, force } = reglagesLus()[e.cle];
   // Une fraction de toile se lit mal : on la montre en pixels sur le format visé
   const lu = e.enPixels
     ? `${Math.max(2, Math.round(force * parseInt($('#taille').value)))} px`
@@ -950,6 +1130,12 @@ function corps(extra = {}) {
   };
 }
 
+function direEtat(texte, genre = '') {
+  const el = $('#etat');
+  el.textContent = texte;
+  el.className = 'etat' + (genre ? ' ' + genre : '');
+}
+
 let minuterie = null, enCours = false, aRefaire = false;
 
 function demanderRendu() {
@@ -958,11 +1144,18 @@ function demanderRendu() {
   minuterie = setTimeout(rendre, 140);   // on laisse le curseur se poser
 }
 
+function montrerEtabli(plein) {
+  $('#scene-apercu').hidden = !plein;
+  $('#vide').hidden = plein;
+  $('#temps-zone').hidden = !plein;
+  $('#recadrer').hidden = !plein;
+  if (!plein) { $('#decadrer').hidden = true; $('#dit-cadre').textContent = ''; }
+}
+
 async function rendre() {
   if (!etat.choisies.length) {
-    $('#scene-apercu').hidden = true; $('#vide').hidden = false;
-    $('#axe').hidden = true; $('#outils-cadre').hidden = true;
-    $('#etat').textContent = '';
+    montrerEtabli(false);
+    direEtat('');
     return;
   }
   if (enCours) { aRefaire = true; return; }   // une seule requête à la fois
@@ -974,15 +1167,14 @@ async function rendre() {
   // rien dire, l'attente passe pour un blocage.
   const depart = performance.now();
   const compteur = setInterval(() => {
-    $('#etat').textContent =
-      `calcul… ${((performance.now() - depart) / 1000).toFixed(1)} s`;
-  }, 200);
+    if (!etat.trace) direEtat(`Calcul… ${((performance.now() - depart) / 1000).toFixed(1).replace('.', ',')} s`);
+  }, 250);
   try {
     const r = await fetch('/api/render', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(corps()),
+      body: JSON.stringify(corps({ size: tailleApercu() })),
     });
-    if (!r.ok) throw new Error((await r.json()).error || 'échec du rendu');
+    if (!r.ok) throw new Error((await r.json()).error || 'Le rendu a échoué.');
 
     ajusterAxe(parseInt(r.headers.get('X-Atelier-Frames') || '0'));
     const graine = r.headers.get('X-Atelier-Seed');
@@ -992,17 +1184,13 @@ async function rendre() {
     const vue = $('#apercu');
     if (vue.src) URL.revokeObjectURL(vue.src);
     vue.src = image;
-    $('#scene-apercu').hidden = false; $('#vide').hidden = true;
-    $('#axe').hidden = false; $('#outils-cadre').hidden = false;
+    montrerEtabli(true);
+    ajusterApercu();
     vue.decode().then(montrerCadre).catch(() => montrerCadre());
-
-    const instant = parseInt($('#temps').value);
-    $('#etat').textContent =
-      `${etat.choisies.length} couche${etat.choisies.length > 1 ? 's' : ''} · `
-      + `graine ${graine} · instant ${instant + 1}/${etat.totalFrames}`
-      + ` · ${Math.round(performance.now() - depart)} ms`;
+    if (!etat.trace) direEtat('');
+    demanderPellicule();
   } catch (e) {
-    $('#etat').textContent = e.message;
+    direEtat(e.message, 'erreur');
   } finally {
     clearInterval(compteur);
     enCours = false;
@@ -1012,7 +1200,71 @@ async function rendre() {
   }
 }
 
+// L'aperçu se calcule à la taille où on le voit, sans dépasser celle du
+// serveur : plus grand, il coûterait sans rien montrer de plus.
+function tailleApercu() {
+  const cote = parseFloat($('#apercu').style.width) || 900;
+  return Math.max(320, Math.min(900, Math.round(cote * Math.min(2, window.devicePixelRatio || 1))));
+}
+
+// L'image prend toute la place que lui laissent le temps et la barre du haut.
+// Elle est carrée : la toile l'est.
+function ajusterApercu() {
+  const r = $('#plateau').getBoundingClientRect();
+  const cote = Math.max(160, Math.floor(Math.min(r.width, r.height)));
+  const vue = $('#apercu');
+  vue.style.width = vue.style.height = cote + 'px';
+  montrerCadre();
+}
+new ResizeObserver(ajusterApercu).observe($('#plateau'));
+
+// --- la pellicule -----------------------------------------------------------
+// Elle ne dépend pas de l'instant : on ne la recalcule que si la composition
+// change, pas à chaque pas sur l'axe.
+let pelliculePour = '', minuteriePellicule = null;
+const sansInstant = () => { const c = corps(); delete c.moment; return JSON.stringify(c); };
+
+function demanderPellicule() {
+  if (sansInstant() === pelliculePour) return;
+  clearTimeout(minuteriePellicule);
+  minuteriePellicule = setTimeout(chargerPellicule, 300);
+}
+
+async function chargerPellicule() {
+  const cle = sansInstant();
+  if (!etat.choisies.length || cle === pelliculePour) return;
+  $('#pellicule').classList.add('attente');
+  try {
+    const d = await (await fetch('/api/pellicule', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(corps()),
+    })).json();
+    if (d.error || sansInstant() !== cle) return;   // la composition a bougé entre-temps
+    pelliculePour = cle;
+    $('#images-pellicule').innerHTML = d.images.map(src => `<img src="${src}" alt="">`).join('');
+    $('#pellicule').style.setProperty('--demi', (50 / d.images.length) + '%');
+  } catch (e) { /* la pellicule accompagne, elle ne bloque rien */ }
+  finally { $('#pellicule').classList.remove('attente'); }
+}
+
 // --- tirage -----------------------------------------------------------------
+function peindreTirer() {
+  const n = etat.choisies.length;
+  $('#exporter').disabled = !n;
+  const video = etat.enchaine ? n >= 2 : n >= 1;
+  $('#tirer-video').disabled = !video;
+  $('#tirer-video').title = video ? ''
+    : etat.enchaine ? 'Il faut au moins deux images pour les enchaîner.' : 'Posez une image.';
+}
+
+function direResultat(titre, detail = '', genre = '') {
+  const el = $('#resultat');
+  el.className = 'resultat' + (genre ? ' ' + genre : '');
+  el.innerHTML = '';
+  if (titre) { const s = document.createElement('strong'); s.textContent = titre; el.append(s); }
+  if (detail) el.append(detail);
+}
+
 // Suit une tâche jusqu'au bout en montrant où elle en est.
 async function suivre(job, bouton, mot) {
   const jauge = $('#jauge-travail'), remplit = $('#remplit');
@@ -1024,14 +1276,13 @@ async function suivre(job, bouton, mot) {
       if (t.state === 'fini') { remplit.style.width = '100%'; return t; }
       if (t.state === 'échec') throw new Error(t.error);
       const part = t.total ? Math.round(100 * (t.done || 0) / t.total) : 0;
-      remplit.style.width = Math.max(4, part) + '%';
+      remplit.style.width = Math.max(3, part) + '%';
       bouton.textContent = `${mot} ${part} %`;
-      $('#resultat').textContent =
-        `${t.state} · ${((performance.now() - depart) / 1000).toFixed(0)} s`;
+      direResultat('', `${t.state}, ${((performance.now() - depart) / 1000).toFixed(0)} s`);
       await new Promise(r => setTimeout(r, 400));
     }
   } finally {
-    setTimeout(() => { jauge.hidden = true; remplit.style.width = '0'; }, 600);
+    setTimeout(() => { jauge.hidden = true; remplit.style.width = '0'; }, 700);
   }
 }
 
@@ -1039,8 +1290,7 @@ async function exporter() {
   if (!etat.choisies.length) return;
   const bouton = $('#exporter'), taille = parseInt($('#taille').value);
   bouton.disabled = true; bouton.textContent = 'Calcul…';
-  $('#resultat').textContent = ''; $('#resultat').className = 'resultat';
-
+  direResultat('');
   try {
     const lance = await (await fetch('/api/export', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -1049,61 +1299,53 @@ async function exporter() {
     if (lance.error) throw new Error(lance.error);
 
     const t = await suivre(lance.job, bouton, 'Calcul');
-    $('#resultat').className = 'resultat abouti';
     // Un cadre serré fait buter la toile sur son plafond : la sortie est
     // alors plus petite que demandé, et il vaut mieux le dire.
-    const rogne = t.rogne ? ` — le cadre a buté sur la toile maximale, `
-      + `${taille} px n'étaient pas atteignables` : '';
-    $('#resultat').textContent =
-      `${t.size} px · ${t.centimetres} cm à 300 dpi → ${t.path}${rogne}`;
-    chargerTirages();
+    const rogne = t.rogne ? ` Le cadre a buté sur la toile maximale : ${taille} px n'étaient pas atteignables.` : '';
+    direResultat(`Image tirée, ${t.size} px (${String(t.centimetres).replace('.', ',')} cm à 300 dpi)`, t.path + rogne);
+    chargerTirages(nomDe(t.path));
   } catch (e) {
-    $('#resultat').textContent = e.message;
+    direResultat("Le tirage a échoué", e.message, 'erreur');
   } finally {
-    bouton.disabled = false; bouton.textContent = 'Tirer cet instant';
+    bouton.textContent = "Tirer l'image";
+    peindreTirer();
   }
 }
 
 async function tirerVideo() {
-  if (etat.choisies.length < 2) {
-    $('#resultat').className = 'resultat';
-    $('#resultat').textContent = 'Il faut au moins deux couches pour une séquence.';
-    return;
-  }
   const bouton = $('#tirer-video'), taille = parseInt($('#taille').value);
   bouton.disabled = true;
-  $('#resultat').className = 'resultat';
-
+  direResultat('');
   try {
     const lance = await (await fetch('/api/video', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(corps({ size: taille })),
     })).json();
     if (lance.error) throw new Error(lance.error);
-
-    const t = await suivre(lance.job, bouton, 'Séquence');
-    $('#resultat').className = 'resultat abouti';
-    $('#resultat').textContent = `${t.written} images → ${t.path}`;
+    const t = await suivre(lance.job, bouton, 'Vidéo');
+    direResultat(`Vidéo tirée, ${t.written} images`, t.path);
   } catch (e) {
-    $('#resultat').textContent = e.message;
+    direResultat('La vidéo a échoué', e.message, 'erreur');
   } finally {
-    bouton.disabled = false; bouton.textContent = "Tirer tout l'axe en vidéo";
+    bouton.textContent = 'Tirer la vidéo';
+    peindreTirer();
   }
 }
 
 // --- reprendre --------------------------------------------------------------
-async function chargerTirages() {
+async function chargerTirages(neuf = '') {
   const d = await (await fetch('/api/exports')).json();
   const zone = $('#tirages');
   if (!d.exports || !d.exports.length) {
-    zone.innerHTML = '<p class="note">Aucun tirage pour l\'instant.</p>';
+    zone.innerHTML = '<p class="note" style="grid-column:1/-1">Vos tirages apparaîtront ici. Un clic en reprend tous les réglages.</p>';
     return;
   }
   zone.innerHTML = d.exports.map((t, i) => `
-    <div class="tirage ${t.complete ? '' : 'incomplet'}" data-rang="${i}">
-      <b>graine ${t.seed}</b>
-      <em>${t.complete ? t.name : 'images sources introuvables'}</em>
-    </div>`).join('');
+    <button class="tirage ${t.complete ? '' : 'incomplet'} ${t.name === neuf ? 'neuf' : ''}" data-rang="${i}"
+            title="${t.complete ? t.name : t.name + ' : images sources introuvables dans ce dossier'}"
+            ${t.complete ? '' : 'aria-disabled="true"'}>
+      <img loading="lazy" src="/api/tirage?name=${encodeURIComponent(t.name)}" alt="${t.name}">
+    </button>`).join('');
 
   zone.querySelectorAll('.tirage:not(.incomplet)').forEach(el => {
     el.onclick = () => appliquer(d.exports[parseInt(el.dataset.rang)].recipe);
@@ -1148,10 +1390,11 @@ function appliquer(r) {
   montrerTemps(); montrerAxe(); montrerMorsure();
 
   peindreChoix();
+  peindreCurseurs();
   rendre();
 }
 
-// --- le cadre de sortie ---
+// --- le cadre de sortie -------------------------------------------------------
 
 // Tracer un cadre ne rogne pas une image déjà faite : il dit quelle part de
 // la toile on garde, et le tirage calcule alors la toile assez grande pour
@@ -1162,20 +1405,19 @@ function quitterLeTrace() {
   etat.trace = false;
   $('#scene-apercu').classList.remove('tracable');
   $('#voile').hidden = true;
-  $('#recadrer').classList.remove('pousse');
+  $('#recadrer').classList.remove('enfonce');
   $('#recadrer').textContent = etat.cadre ? 'Retracer' : 'Recadrer';
+  direEtat('');
   montrerCadre();
 }
 
 function montrerCadre() {
   const c = etat.cadre;
   // Le cadre ne se dessine que pendant le tracé : une fois posé, l'aperçu
-  // montre directement la part gardée, il n'y a plus rien à encadrer.
+  // montre directement la part gardée.
   $('#cadre').hidden = !c || !etat.trace;
-  $('#decadrer').hidden = !c;
-  $('#dit-cadre').textContent = c
-    ? `cadre : ${Math.round(c[2] * 100)} % du côté`
-    : '';
+  $('#decadrer').hidden = !c || !etat.choisies.length;
+  $('#dit-cadre').textContent = c && etat.choisies.length ? `Cadre : ${Math.round(c[2] * 100)} % du côté` : '';
   if (!c || !etat.trace) return;
   const vue = $('#apercu').getBoundingClientRect();
   const scene = $('#scene-apercu').getBoundingClientRect();
@@ -1198,14 +1440,13 @@ function brancherCadre() {
     etat.trace = true;
     scene.classList.add('tracable');
     $('#voile').hidden = false;
-    $('#recadrer').classList.add('pousse');
-    $('#recadrer').textContent = 'Tracer…';
+    $('#recadrer').classList.add('enfonce');
+    $('#recadrer').textContent = 'Annuler';
+    direEtat("Tracez un carré sur l'image : c'est la part qui sera tirée.", 'consigne');
     rendre();
   };
 
-  $('#decadrer').onclick = () => {
-    etat.cadre = null; quitterLeTrace(); rendre();
-  };
+  $('#decadrer').onclick = () => { etat.cadre = null; quitterLeTrace(); rendre(); };
 
   const position = ev => {
     const r = vue.getBoundingClientRect();
@@ -1239,8 +1480,6 @@ function brancherCadre() {
     quitterLeTrace();
     rendre();
   };
-
-  window.addEventListener('resize', montrerCadre);
 }
 
 // --- l'axe ------------------------------------------------------------------
@@ -1255,29 +1494,15 @@ function ajusterAxe(total) {
   montrerTemps();
 }
 
-// Les réglages du temps ne font rien tant qu'on est au premier instant :
-// bouger un curseur sans rien voir bouger est le plus sûr moyen de ne pas
-// comprendre à quoi il sert.
-function noterTemps() {
-  const debut = parseInt($('#temps').value) === 0;
-  const note = $('#note-temps');
-  note.style.color = debut ? 'var(--ferment)' : 'var(--spore)';
-  note.textContent = debut
-    ? "Ces réglages ne mordent qu'une fois l'axe engagé. Avancez la barre sous l'aperçu."
-    : "Comment la matière se défait à mesure qu'on avance sur l'axe.";
-}
-
 function montrerTemps() {
-  $('#v-temps').textContent = `${parseInt($('#temps').value) + 1} / ${etat.totalFrames}`;
-  noterTemps();
+  const instant = parseInt($('#temps').value);
+  $('#v-temps').textContent = `${instant + 1} / ${etat.totalFrames}`;
+  // Les réglages du temps ne font rien au premier instant : bouger un
+  // curseur sans rien voir bouger est le plus sûr moyen de ne pas
+  // comprendre à quoi il sert.
+  $('#indice-temps').style.visibility = instant === 0 ? 'visible' : 'hidden';
   peindreJauges();
 }
-
-// Les réglages que l'enchaînement n'emploie pas. Il n'y a pas de couches à
-// décaler, rien à faire survivre — une transition doit arriver au bout, sinon
-// l'image suivante n'apparaîtrait jamais entière — et la toile étant toujours
-// pleine, il n'y a pas de présence à éteindre.
-const SANS_OBJET_ENCHAINE = ['stagger', 'residue', 'disparition'];
 
 function poserMode(enchaine) {
   etat.enchaine = !!enchaine;
@@ -1287,15 +1512,23 @@ function poserMode(enchaine) {
     const reglage = $('#' + id).closest('.reglage');
     if (reglage) reglage.classList.toggle('inerte', etat.enchaine);
   });
-  $('#note-mode').textContent = etat.enchaine
-    ? "Chaque image se défait pour découvrir la suivante. La toile reste pleine du début à la fin : c'est le montage des vidéos de 2025, et il n'y a jamais de fond."
-    : "Toutes les images sont là en même temps et se compostent ensemble. Ce que l'évidement creuse finit par déboucher sur le fond.";
+  peindreTirer();
+  peindreJauges();
 }
 
 function poserCadrage(plein) {
   etat.pleinCadre = !!plein;
   document.querySelectorAll('[data-cadre]').forEach(b =>
     b.classList.toggle('tenu', (b.dataset.cadre === 'plein') === etat.pleinCadre));
+}
+
+// --- les onglets --------------------------------------------------------------
+function montrerOnglet(nom) {
+  document.querySelectorAll('.onglet').forEach(b =>
+    b.setAttribute('aria-selected', String(b.dataset.onglet === nom)));
+  ['matieres', 'morsure', 'temps'].forEach(v => { $('#volet-' + v).hidden = nom !== v; });
+  $('#fins-ouvrir').classList.toggle('enfonce', nom === 'temps');
+  try { localStorage.setItem('atelier-onglet', nom); } catch (e) { /* sans mémoire, tant pis */ }
 }
 
 // --- les bulles d'aide ------------------------------------------------------
@@ -1309,13 +1542,14 @@ function fermerAide() {
 
 function brancherAides() {
   const bulle = $('#bulle');
-  document.querySelectorAll('label[for], .matiere').forEach(hote => {
-    const cible = hote.dataset.cle
-      || (hote.getAttribute('for') || '').replace(/^(on|f|a)-/, '');
-    const texte = AIDES[cible];
-    if (!texte) return;
-    const ligne = hote.classList.contains('matiere') ? hote : hote.parentElement;
-    if (!ligne || ligne.querySelector('.aide')) return;
+  const hotes = [
+    ...[...document.querySelectorAll('label[for]')].map(l => [l.getAttribute('for'), l.parentElement]),
+    ...[...document.querySelectorAll('.matiere')].map(m => [m.dataset.cle, m]),
+    ...[...document.querySelectorAll('[data-aide]')].map(h => [h.dataset.aide, h]),
+  ];
+  hotes.forEach(([cle, ligne]) => {
+    const texte = AIDES[cle || ''];
+    if (!texte || !ligne || ligne.querySelector(':scope > .aide')) return;
 
     const bouton = document.createElement('button');
     bouton.className = 'aide';
@@ -1332,21 +1566,60 @@ function brancherAides() {
       bouton.classList.add('ouverte');
       bulle.textContent = texte;
       bulle.style.display = 'block';
+      // À gauche, hors du panneau de droite : posée sur lui, elle cachait la
+      // ligne même qu'elle explique. Ailleurs, à gauche du bouton si la place
+      // y est, sinon à droite.
       const r = bouton.getBoundingClientRect();
       const large = bulle.offsetWidth, haute = bulle.offsetHeight;
-      bulle.style.left = Math.max(8, r.left - large - 10) + 'px';
-      bulle.style.top = Math.min(window.innerHeight - haute - 8,
-                                 Math.max(8, r.top - 6)) + 'px';
+      const panneau = bouton.closest('.droite-panneau');
+      const gauche = (panneau ? panneau.getBoundingClientRect().left : r.left) - large - 10;
+      bulle.style.left = (gauche >= 8 ? gauche : Math.min(window.innerWidth - large - 8, r.right + 10)) + 'px';
+      bulle.style.top = Math.min(window.innerHeight - haute - 8, Math.max(8, r.top - 6)) + 'px';
     };
   });
 }
 
-document.addEventListener('click', fermerAide);
-document.addEventListener('keydown', e => { if (e.key === 'Escape') fermerAide(); });
+// --- le hasard ----------------------------------------------------------------
+function peindreVeine() {
+  const [, , avec] = VEINES.find(([cle]) => cle === etat.veine);
+  $('#hasard').textContent = avec ? `Au hasard, avec ${avec}` : 'Au hasard';
+  document.querySelectorAll('[data-veine]').forEach(b =>
+    b.setAttribute('aria-checked', String(b.dataset.veine === etat.veine)));
+}
+
+function ouvrirVeine(ouvert) {
+  $('#veine').hidden = !ouvert;
+  $('#veine-ouvrir').setAttribute('aria-expanded', String(ouvert));
+}
+
+function batirVeine() {
+  $('#veine').insertAdjacentHTML('beforeend', VEINES.map(([cle, nom]) =>
+    `<button role="menuitemradio" data-veine="${cle}" aria-checked="false">${nom}</button>`).join(''));
+  document.querySelectorAll('[data-veine]').forEach(b => {
+    b.onclick = () => { etat.veine = b.dataset.veine; peindreVeine(); ouvrirVeine(false); };
+  });
+  $('#veine-ouvrir').onclick = ev => { ev.stopPropagation(); ouvrirVeine($('#veine').hidden); };
+  $('#veine').onclick = ev => ev.stopPropagation();
+  peindreVeine();
+}
+
+async function auHasard() {
+  const boutons = [$('#hasard'), $('#hasard-vide')];
+  boutons.forEach(b => { b.disabled = true; });
+  try {
+    const d = await (await fetch('/api/chance' + (etat.veine ? '?family=' + etat.veine : ''))).json();
+    if (d.error) { direEtat(d.error, 'erreur'); return; }
+    appliquer(d.recipe);   // un tirage se reprend comme un export
+  } finally {
+    boutons.forEach(b => { b.disabled = false; });
+  }
+}
 
 // --- branchements -----------------------------------------------------------
-const UNITES = { seuil: v => v + ' %', bavure: v => Math.round(v * 100) + ' %',
-                 disparition: v => v + ' %' };
+const UNITES = {
+  seuil: v => v + ' %', bavure: v => Math.round(v * 100) + ' %',
+  disparition: v => v + ' %', lissage: v => String(v).replace('.', ','),
+};
 function montrerMorsure() {
   MORSURE.forEach(id => {
     $('#v-' + id).textContent = UNITES[id] ? UNITES[id]($('#' + id).value) : $('#' + id).value;
@@ -1357,10 +1630,10 @@ MORSURE.forEach(id => {
 });
 
 const CHIFFRES = {
-  frames: v => `${v} images`, stagger: v => `${Math.round(v * 100)} %`,
+  frames: v => `${v} im.`, stagger: v => `${Math.round(v * 100)} %`,
   residue: v => `${Math.round(v * 100)} %`, tearing: v => `${Math.round(v * 100)} %`,
-  ripening: v => `× ${(1 + parseFloat(v)).toFixed(1)}`,
-  segment_growth: v => `× ${(1 + parseFloat(v)).toFixed(1)}`,
+  ripening: v => `× ${(1 + parseFloat(v)).toFixed(1).replace('.', ',')}`,
+  segment_growth: v => `× ${(1 + parseFloat(v)).toFixed(1).replace('.', ',')}`,
 };
 function montrerAxe() { AXE.forEach(cle => $('#' + cle).dispatchEvent(new Event('afficher'))); }
 
@@ -1383,51 +1656,45 @@ AXE.forEach(cle => {
 BASCULES.forEach(cle => { $('#' + cle).onchange = demanderRendu; });
 
 $('#temps').oninput = () => { montrerTemps(); demanderRendu(); };
-$('#debordement').onchange = demanderRendu;
 $('#graine').onchange = demanderRendu;
 $('#relancer').onclick = () => { $('#graine').value = ''; rendre(); };
 $('#taille').onchange = () => { EFFETS.forEach(afficherValeur); montrerAxe(); };
 $('#exporter').onclick = exporter;
 $('#tirer-video').onclick = tirerVideo;
 $('#dossier').onchange = () => changerDossier($('#dossier').value);
-$('#cible').onchange = () => { etat.cible = $('#cible').value; peindreChoix(); };
-
+$('#hasard').onclick = auHasard;
+$('#hasard-vide').onclick = auHasard;
+$('#rejoindre').onclick = () => {
+  delete etat.propres[etat.cible];
+  peindrePile(); peindreCible(); demanderRendu();
+};
+$('#fins-ouvrir').onclick = () => montrerOnglet('temps');
+document.querySelectorAll('.onglet').forEach(b => { b.onclick = () => montrerOnglet(b.dataset.onglet); });
 document.querySelectorAll('[data-cadre]').forEach(b => {
   b.onclick = () => { poserCadrage(b.dataset.cadre === 'plein'); demanderRendu(); };
 });
-
 document.querySelectorAll('[data-temps]').forEach(b => {
   b.onclick = () => { poserMode(b.dataset.temps === 'chaine'); demanderRendu(); };
 });
 
-$('#hasard').onclick = async () => {
-  const bouton = $('#hasard');
-  bouton.disabled = true;
-  try {
-    const famille = $('#famille').value;
-    const d = await (await fetch('/api/chance' + (famille ? '?family=' + famille : ''))).json();
-    if (d.error) { $('#etat').textContent = d.error; return; }
-    appliquer(d.recipe);   // un tirage se reprend comme un export
-  } finally {
-    bouton.disabled = false;
-  }
-};
-
-// Les libellés disent « autour de » : la veine choisie est toujours au
-// centre du tirage, mais elle n'y est seule qu'une fois sur trois.
-$('#famille').innerHTML =
-  '<option value="">au hasard complet</option>'
-  + [['halftone', 'de la trame'], ['bitmap', 'du bitmap'],
-     ['pixelate', 'de la pixellisation'], ['saturate', 'de la saturation']]
-      .map(([cle, nom]) => `<option value="${cle}">autour ${nom}</option>`)
-      .join('');
+document.addEventListener('click', () => { fermerAide(); ouvrirVeine(false); });
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Escape') return;
+  fermerAide(); ouvrirVeine(false);
+  if (etat.trace) { quitterLeTrace(); rendre(); }
+});
+window.addEventListener('resize', montrerCadre);
 
 batirMatieres();
+batirVeine();
 brancherCadre();
 brancherAides();
 poserMode(false);
 montrerMorsure();
 montrerTemps();
+peindreCurseurs();
+try { montrerOnglet(localStorage.getItem('atelier-onglet') || 'matieres'); }
+catch (e) { montrerOnglet('matieres'); }
 chargerSources();
 chargerTirages();
 </script>

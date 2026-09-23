@@ -65,34 +65,79 @@ images ne quittent pas le disque.
 
 ## Utiliser
 
+L'écran se lit de gauche à droite, dans l'ordre du travail : les images, puis
+l'image composée et son temps, puis les réglages et le tirage.
+
+```
+┌ Atelier.  dossier ▾          Dans le cadre | Plein cadre          Au hasard ▾ ┐
+├────────────┬───────────────────────────────────────────┬─────────────────────┤
+│ La pile    │                               Recadrer    │ Matières│Où ça mord│…│
+│ Le dossier │               l'image                     │                     │
+│ Reprendre  │  ▕▣▕▣▕▣▕▣▕▣▕▣▕▣▕▣▕▣▕▣▕   la pellicule       │                     │
+│            │  Superposées│Enchaînées    Réglages fins │ 4000 px     JPEG    │
+│            │  Durée   Mûrissement   Déchirure           │ Tirer l'image  Vidéo│
+└────────────┴───────────────────────────────────────────┴─────────────────────┘
+```
+
 Le plus court chemin : **Au hasard**, en haut à droite. Le bouton tire les
 images et tous les réglages, et l'aperçu apparaît. Rien n'y est figé : tout
-ce qu'il a posé se reprend à la main ensuite. Le menu à côté restreint le
-tirage à une veine — trame, bitmap, pixellisation ou saturation.
+ce qu'il a posé se reprend à la main ensuite. La flèche à côté lui demande de
+partir d'une matière — trame, bitmap, pixellisation ou saturation ; elle sera
+toujours là, rarement seule, et le bouton le dit : « Au hasard, avec de la
+trame ».
 
 Sinon, à la main : à gauche, cliquer les images du dossier dans l'ordre où
-elles doivent se superposer. Elles s'empilent alors dans **la pile**, la
-dernière posée en haut — c'est celle que le temps défait la première. Chaque
-strate porte sur son flanc une jauge qui montre où elle en est à l'instant
-courant, et deux boutons pour la remonter dans la pile ou l'en retirer ;
-cliquer sa vignette la règle à part du reste.
+elles doivent se superposer. Elles s'empilent dans **la pile**, la dernière
+posée en haut — c'est celle que le temps défait la première. Chaque strate
+porte sur son flanc une jauge qui montre où elle en est à l'instant courant,
+et deux boutons pour la remonter ou la retirer.
 
-À droite, chaque matière occupe une ligne, avec une vignette qui **montre ce
-qu'elle fait** sur les images en cours, avant qu'on l'active. Une matière
-posée s'ouvre sur ses réglages juste en dessous, sans changer de place dans
-la liste. Les sept formes de trame sont des pastilles montrant le motif exact
-que la trame produira.
+### Le temps, sous l'image
 
-L'aperçu se recalcule en continu. Sur trois images, comptez 0,2 s au premier
-instant, 0,6 s au milieu de l'axe, et jusqu'à 1,5 s avec un datamoshing et de
-la bavure — c'est le tri par canaux qui coûte, et il coûte d'autant plus que
-la bavure élargit la zone à trier. Pendant le calcul, une barre passe en haut
-de l'aperçu et le compteur s'affiche sous lui.
+Sous l'image, **la pellicule** montre l'axe entier en dix vignettes, de
+l'intact au composté : on voit où va la décomposition avant de la parcourir.
+La tête de lecture se glisse dessus, et l'image suit. La pellicule ne se
+recalcule que si la composition change, pas à chaque pas sur l'axe ; elle
+coûte un tiers de seconde.
 
-Quand une composition tient, choisir un format et **Tirer**. Le fichier part
-dans `sorties/`, avec sa recette à l'intérieur. Le calcul se fait en tâche de
-fond : une barre suit les couches, le compteur les secondes, et l'interface
-reste utilisable.
+Juste dessous, ce qu'on touche le plus : le mode — **Superposées** ou
+**Enchaînées** —, la durée, le mûrissement et la déchirure. Les six réglages
+fins et les bascules de fidélité sont derrière **Réglages fins**, qui ouvre
+l'onglet correspondant à droite plutôt que de pousser l'image vers le haut :
+déplié sous la pellicule, sur un écran de 760 px de haut, il la réduisait à
+200 px.
+
+### Les réglages et le tirage, à droite
+
+Trois onglets : **Matières**, **Où ça mord**, **Réglages fins**. Le dernier
+ouvert est retenu d'une séance à l'autre.
+
+Chaque matière occupe une ligne, avec une vignette qui **montre ce qu'elle
+fait** sur les images en cours, et un interrupteur. Posée, sa vignette
+s'allume, l'interrupteur passe à l'ocre et ses réglages s'ouvrent dessous. Le
+débordement de saturation est dans les réglages de la saturation, puisqu'il
+ne concerne qu'elle.
+
+Dès qu'il y a deux couches, une rangée de vignettes au-dessus des matières
+choisit **sur quelle couche** on règle : « Toute la pile », ou une couche
+précise — on peut tramer l'une, pixelliser l'autre, et laisser la troisième
+intacte. Regarder une couche ne la détache pas du réglage commun ; elle n'a
+ses propres matières qu'à partir du moment où on y en change une, et un point
+ocre le signale. **Suivre le réglage commun** l'y ramène. Cliquer la vignette
+d'une strate dans la pile fait la même chose.
+
+Le bas du panneau reste en vue quoi qu'on fasse défiler : format, **Tirer
+l'image**, **Tirer la vidéo**, et la graine. Le calcul se fait en tâche de
+fond ; une barre suit les couches, le bouton dit le pourcentage, et
+l'interface reste utilisable.
+
+### Ce qui se passe pendant qu'on travaille
+
+L'aperçu se calcule à la taille où on le voit. Sur trois images, comptez
+0,2 s au premier instant, 0,6 s au milieu de l'axe, et jusqu'à 1,5 s avec un
+datamoshing et de la bavure — c'est le tri par canaux qui coûte, et il coûte
+d'autant plus que la bavure élargit la zone à trier. Pendant le calcul, une
+barre passe en haut de l'image et le compteur s'affiche au-dessus d'elle.
 
 **Un tirage n'en écrase jamais un autre.** Le nom porte la graine, l'instant
 et la taille — `atelier_1234_t24_4000.jpg` —, mais cela ne suffit pas à
@@ -106,20 +151,15 @@ Les vignettes des matières se recalculent quand la pile change, en une
 seconde environ. Elles montrent chaque matière seule et à force marquée : ce
 sont des échantillons, comme un nuancier, pas l'aperçu du réglage courant.
 
-Un tirage déjà fait réapparaît sous **Reprendre** : un clic restaure ses
-images, sa graine, son instant sur l'axe et tous ses réglages. C'est le seul
-usage de la graine — elle sert à revenir sur un tirage pour l'agrandir, pas à
-répéter quoi que ce soit.
+Un tirage déjà fait réapparaît sous **Reprendre un tirage**, en vignette, du
+plus récent au plus ancien ; celui qu'on vient d'écrire s'allume un instant.
+Un clic restaure ses images, sa graine, son instant sur l'axe et tous ses
+réglages. C'est le seul usage de la graine — elle sert à revenir sur un
+tirage pour l'agrandir, pas à répéter quoi que ce soit.
 
 Le menu en haut à gauche change de dossier sans relancer l'atelier : il
-propose le dossier parent et les dossiers voisins qui contiennent des images,
-en signalant celui qui reçoit les tirages.
-
-Au-dessus des matières, un second menu choisit **à quelle image** elles
-s'appliquent. Par défaut « Toutes les images » ; en choisissant une image
-précise, les curseurs ne règlent plus qu'elle — on peut tramer l'une,
-pixelliser l'autre, et laisser la troisième intacte. Les images ayant leur
-propre réglage sont marquées d'un trait dans la liste.
+propose les dossiers voisins qui contiennent des images, en signalant celui
+qui reçoit les tirages.
 
 Chaque réglage porte un `?` en bout de ligne. Un clic ouvre une phrase sur ce
 qu'il fait concrètement à l'image ; un clic ailleurs, ou Échap, la referme.
@@ -265,10 +305,12 @@ placement décide quelle part on garde, et il ne reste aucun fond.
 
 ### Recadrer la sortie
 
-**Recadrer** fait revenir la toile entière le temps qu'on trace un carré
-dessus — il faut voir ce qu'on écarte pour le placer. Le tracé fini,
-l'aperçu ne montre plus que la part gardée. **Retracer** rouvre la toile,
-**Tout le cadre** revient en arrière.
+**Recadrer**, au-dessus de l'image à droite, fait revenir la toile entière le
+temps qu'on trace un carré dessus — il faut voir ce qu'on écarte pour le
+placer. La consigne s'affiche à la place du compteur ; **Annuler** ou Échap
+abandonne. Le tracé fini, l'aperçu et la pellicule ne montrent plus que la
+part gardée. **Retracer** rouvre la toile, **Tout le cadre** revient en
+arrière.
 
 Ce n'est pas un rognage. Rogner une image déjà rendue perdrait la définition
 qu'on vient de demander. Le cadre dit quelle part de la toile on garde, et la

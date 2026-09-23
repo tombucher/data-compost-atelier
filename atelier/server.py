@@ -71,6 +71,13 @@ VIGNETTE_FORCES = {
 }
 THUMBNAIL = 220
 
+# Côté d'une image de la pellicule, et combien elle en montre. La pellicule
+# rend l'axe visible d'un coup d'œil : on voit où va la décomposition avant
+# de parcourir le temps. Dix images à cette taille se calculent en un
+# quart de seconde, une fois les sources réduites.
+PELLICULE = 112
+PELLICULE_IMAGES = 10
+
 
 class Library:
     """Les images du dossier de travail, chargées une fois pour toutes.
@@ -239,6 +246,10 @@ def decay_payload(decay: Decay) -> dict:
 # n'existe qu'une fois écrit : deux tirages lancés coup sur coup
 # choisiraient donc le même nom, et le second écraserait le premier au
 # moment d'écrire. On retient donc aussi les noms promis.
+# Les vignettes des tirages, gardées d'une requête à l'autre. La clé porte
+# la date du fichier : un tirage remplacé à la main se revoit tel qu'il est.
+TIRAGES_VUS: dict[tuple[str, float], bytes] = {}
+
 NOMS_LOCK = threading.Lock()
 NOMS_PROMIS: set[str] = set()
 
@@ -468,6 +479,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._chance(query.get("family", [""])[0])
             if route.path == "/api/motif":
                 return self._motif(query.get("shape", ["round"])[0])
+            if route.path == "/api/tirage":
+                return self._apercu_tirage(unquote(query.get("name", [""])[0]))
             return self._static(route.path.lstrip("/"))
         except Exception as exc:  # noqa: BLE001 — une requête ne tue pas le serveur
             self._fail(exc)
@@ -479,6 +492,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._render()
             if route.path == "/api/vignettes":
                 return self._vignettes()
+            if route.path == "/api/pellicule":
+                return self._pellicule()
             if route.path == "/api/export":
                 return self._export()
             if route.path == "/api/folder":
@@ -525,8 +540,11 @@ class Handler(BaseHTTPRequestHandler):
         if not self.output_dir.is_dir():
             return self._json({"exports": []})
 
+        # Du plus récent au plus ancien. Trier par nom mettait la graine 99
+        # devant la graine 1234 : le dernier tirage se perdait dans la liste.
         found = []
-        for path in sorted(self.output_dir.iterdir(), reverse=True):
+        for path in sorted(self.output_dir.iterdir(),
+                           key=lambda p: p.stat().st_mtime, reverse=True):
             if path.suffix.lower() not in IMAGE_SUFFIXES:
                 continue
             recipe = read_recipe(path)
@@ -619,6 +637,88 @@ class Handler(BaseHTTPRequestHandler):
             rendus[nom] = self._jpeg64(
                 render(essai, size=VIGNETTE, sources=images, fields=cartes))
         self._json({"vignettes": rendus})
+
+    def _pellicule(self):
+        """L'axe entier en quelques images, pour voir où va la décomposition.
+
+        Le temps est le propos de l'atelier, et une barre nue n'en montre
+        rien : il fallait la parcourir pour découvrir ce qu'elle contenait.
+
+        Les images sources sont réduites une fois avant de rendre. Sans cela,
+        les neuf dixièmes du calcul passaient à ramener dix fois chaque
+        source de 2048 px à la taille d'une vignette. Les cartes de saillance
+        sont, elles, calculées sur les copies de travail puis réduites : la
+        pellicule montre la même composition que l'aperçu, pas une voisine.
+        """
+        from atelier.decay import prepare_fields
+
+        body = self._body()
+        recipe, images = recipe_from_request(body, self.library,
+                                             for_size=PELLICULE)
+        decay = decay_from_request(body)
+        total = count_frames(decay, len(images))
+        combien = max(2, min(PELLICULE_IMAGES, total))
+        rangs = sorted({round(k * (total - 1) / (combien - 1))
+                        for k in range(combien)})
+
+        # Le cadre de l'aperçu vaut aussi ici, sinon la pellicule montrerait
+        # une autre image que celle qu'on règle.
+        cadre = recipe.crop_clair()
+        toile = PELLICULE if cadre is None \
+            else min(PELLICULE * 4, int(round(PELLICULE / cadre[2])))
+
+        def reduire(tableau):
+            h, w = tableau.shape[:2]
+            echelle = (toile * 2) / max(h, w)
+            if echelle >= 1:
+                return tableau
+            return cv2.resize(tableau, (max(1, int(w * echelle)),
+                                        max(1, int(h * echelle))),
+                              interpolation=cv2.INTER_AREA)
+
+        petites = [reduire(i) for i in images]
+        if decay.chained:
+            from atelier.chain import frame_at, prepare
+            prepare_ = prepare(recipe, toile, petites)
+            rendre = lambda i: frame_at(recipe, decay, toile, i, prepared=prepare_)
+        else:
+            cartes = [reduire(c) for c in prepare_fields(recipe, images)]
+            rendre = lambda i: compose_at(recipe, decay, toile, i, petites, cartes)
+
+        self._json({
+            "total": total, "rangs": rangs,
+            "images": [self._jpeg64(decouper(rendre(i), cadre, PELLICULE))
+                       for i in rangs],
+        })
+
+    def _apercu_tirage(self, name: str):
+        """La vignette d'un tirage déjà fait.
+
+        Un tirage se reconnaît à son image, pas à sa graine. Seuls les
+        fichiers du dossier des tirages sont servis, par leur nom nu. Un
+        grand format JPEG se décode au huitième, ce qui ramène une image de
+        8000 px à une lecture de quelques millisecondes.
+        """
+        chemin = (self.output_dir / Path(name).name).resolve()
+        if chemin.parent != self.output_dir.resolve() or not chemin.is_file() \
+                or chemin.suffix.lower() not in IMAGE_SUFFIXES:
+            return self._json({"error": "tirage introuvable"}, 404)
+
+        cle = (str(chemin), chemin.stat().st_mtime)
+        cache = TIRAGES_VUS
+        if cle not in cache:
+            image = cv2.imread(str(chemin), cv2.IMREAD_REDUCED_COLOR_8)
+            if image is None:
+                image = cv2.imread(str(chemin))
+            if image is None:
+                return self._json({"error": "tirage illisible"}, 404)
+            h, w = image.shape[:2]
+            echelle = min(1.0, THUMBNAIL / max(h, w))
+            petite = cv2.resize(image, (max(1, int(w * echelle)),
+                                        max(1, int(h * echelle))),
+                                interpolation=cv2.INTER_AREA)
+            cache[cle] = self._jpeg(petite, 78)
+        self._send(200, cache[cle], "image/jpeg")
 
     def _jpeg64(self, image) -> str:
         import base64
